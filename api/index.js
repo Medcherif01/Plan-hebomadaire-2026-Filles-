@@ -182,7 +182,6 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.send(buffer);
-
     } catch (error) {
         console.error('❌ Erreur serveur /generate-ai-lesson-plan:', error);
         if (!res.headersSent) {
@@ -190,6 +189,6 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         }
     }
 });
-
 // Exporter l'app pour Vercel
 module.exports = app;
+

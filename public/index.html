@@ -295,12 +295,24 @@
         let incompleteTeachersInfo = {};
 
         // ===== MODIFIÉ : Nouveaux noms d'enseignants =====
-        const arabicTeachers = ['Jaber', 'Saeed', 'Majed'];
-        const englishTeacher = 'kamel';
-        // Note: La liste ci-dessous doit contenir les mêmes noms que arabicTeachers
-        const teachersToHideColumnsFor = new Set(['Jaber', 'Saeed', 'Majed']);
-        const isArabicUser = () => currentUserLanguage === 'ar';
+        const arabicTeachers = ['Amal Najar', 'Fatima', 'Ghadah', 'Raghd', 'Sara', 'Emen'];
+const englishTeachers = ['Abeer', 'Salma', 'Amal', 'Hana'];
 
+// Note: La liste ci-dessous doit contenir les mêmes noms que arabicTeachers et englishTeachers réunis
+const teachersToHideColumnsFor = new Set([
+  'Amal Najar',
+  'Fatima',
+  'Ghadah',
+  'Raghd',
+  'Sara',
+  'Emen',
+  'Abeer',
+  'Salma',
+  'Amal',
+  'Hana'
+]);
+
+const isArabicUser = () => currentUserLanguage === 'ar';
         // Traductions (complètes et inchangées par rapport à votre original)
         const translations = {
             fr: { 
@@ -603,4 +615,5 @@
 
 </body>
 </html>
+
 

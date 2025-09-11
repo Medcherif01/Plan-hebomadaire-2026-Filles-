@@ -33,9 +33,24 @@ const specificWeekDateRangesNode = {
 };
 
 const validUsers = {
-    "Mohamed": "Mohamed", "Abas": "Abas", "Jaber": "Jaber", "Kamel": "Kamel",
-    "Majed": "Majed", "Mohamed Ali": "Mohamed Ali", "Morched": "Morched", "Saeed": "Saeed",
-    "Sami": "Sami", "Sylvano": "Sylvano", "Tonga": "Tonga", "Youssef": "Youssef", "Zine": "Zine"
+"Abeer": "Abeer",
+"Aichetou": "Aichetou",
+"Amal": "Amal",
+"Amal Najar": "Amal Najar",
+"Ange": "Ange",
+"Anouar": "Anouar",
+"Emen": "Emen",
+"Farah": "Farah",
+"Fatima": "Fatima",
+"Ghadah": "Ghadah",
+"Hana": "Hana",
+"Nada": "Nada",
+"Raghd": "Raghd",
+"Salma": "Salma",
+"Sara": "Sara",
+"Souha": "Souha",
+"Takwa": "Takwa",
+"Zohra": "Zohra"
 };
 
 let cachedDb = null;
@@ -177,3 +192,4 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 
 // Exporter l'app pour Vercel
 module.exports = app;```
+

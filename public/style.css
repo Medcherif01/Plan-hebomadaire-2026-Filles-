@@ -1,0 +1,55 @@
+:root{
+  --primary:#007bff; --primary-hover:#0056b3; --success:#28a745; --success-hover:#1e7e34;
+  --danger:#dc3545; --danger-hover:#a71d2a; --accent:#ffc107; --accent-hover:#d39e00;
+  --bg:#f8f9fa; --surface:#fff; --text:#343a40; --muted:#6c757d; --border:#dee2e6;
+  --radius:8px; --shadow:0 4px 12px rgba(0,0,0,.08); --font:'Poppins',sans-serif;
+}
+*{box-sizing:border-box} body{font-family:var(--font);background:var(--bg);color:var(--text);margin:0;padding:20px;display:flex;align-items:center;justify-content:center;min-height:100vh}
+#login-form{max-width:400px;width:100%;padding:30px;background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center}
+#login-form h1{margin-bottom:25px}
+#login-form div{width:100%;margin-bottom:15px}
+#login-form label{display:block;margin-bottom:5px;font-weight:500}
+#login-form input[type=text],#login-form input[type=password]{width:100%;padding:10px;border:1px solid var(--border);border-radius:5px}
+.password-container{position:relative}
+.password-toggle-icon{position:absolute;top:70%;right:10px;transform:translateY(-50%);cursor:pointer;color:var(--muted)}
+#login-error{color:var(--danger)}
+.section-selector-container select{width:100%;padding:10px;border:1px solid var(--border);border-radius:5px}
+#logo,#logo-main{max-width:120px;margin-bottom:20px}
+.pro-button{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border:none;border-radius:5px;color:#fff;background:var(--primary);cursor:pointer;font-weight:500}
+.pro-button:hover{background:var(--primary-hover)} .pro-button:disabled{background:#a0c7f0;cursor:not-allowed}
+.danger-button{background:var(--danger)} .danger-button:hover{background:var(--danger-hover)}
+.success-button{background:var(--success)} .success-button:hover{background:var(--success-hover)}
+.accent-button{background:var(--accent);color:#333} .accent-button:hover{background:var(--accent-hover)}
+
+#main-content{max-width:1400px;margin:auto;background:var(--surface);padding:20px;border-radius:var(--radius);box-shadow:var(--shadow);width:100%}
+.main-header-container{display:flex;align-items:center;gap:20px;border-bottom:1px solid var(--border);padding-bottom:15px;margin-bottom:20px}
+.title-user-info{flex-grow:1}
+.user-actions-container{display:flex;justify-content:flex-end;align-items:center;gap:15px;margin-top:10px}
+
+.filter-container{display:flex;flex-wrap:wrap;gap:15px;align-items:center;padding:15px;background:#fdfdfd;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:20px}
+.filter-container select,.filter-container input{padding:8px;border:1px solid var(--border);border-radius:5px}
+.admin-section{flex-direction:column;align-items:flex-start;gap:20px}
+.admin-subsection{border-top:1px dashed #ccc;padding-top:15px;width:100%}
+
+.table-responsive-wrapper{overflow-x:auto}
+#planTable{width:100%;border-collapse:collapse;margin-top:20px}
+#planTable th,#planTable td{padding:12px 15px;border:1px solid var(--border);text-align:left;vertical-align:top}
+#planTable thead{background:#e9ecef;font-weight:600}
+#planTable tbody tr:nth-child(even){background:#f8f9fa}
+#planTable tbody tr:hover{background:#e2e6ea}
+td.editable{background:#fffbe6;cursor:text}
+tr.modified{background:#fff3cd!important}
+.actions-column{text-align:center;width:120px}
+.save-row-button{background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--success)}
+.save-row-button:hover{color:var(--success-hover)}
+.updated-at-column{white-space:nowrap}
+
+.message-alert-base{padding:15px;margin-bottom:20px;border-radius:var(--radius);text-align:center;font-weight:500}
+.alert-success{background:#d4edda;color:#155724}
+.alert-error{background:#f8d7da;color:#721c24}
+.alert-warning{background:#fff3cd;color:#856404}
+
+#progress-bar-container{width:100%;background:#e9ecef;border-radius:5px;margin-bottom:20px}
+#progress-bar{width:0%;height:25px;background:var(--primary);text-align:center;line-height:25px;color:#fff;border-radius:5px;transition:width .4s}
+.notes-container{margin-bottom:20px;padding:15px;border:1px solid var(--border);border-radius:var(--radius)}
+#notesInput{width:100%;margin-top:10px;padding:10px;border-radius:5px;border:1px solid var(--border);resize:vertical}

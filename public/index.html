@@ -559,8 +559,11 @@ const isArabicUser = () => currentUserLanguage === 'ar';
                 if (response.ok && result.success) { 
                     loggedInUser = result.username; 
                     if (arabicTeachers.includes(loggedInUser)) { currentUserLanguage = 'ar'; } 
-                    else if (loggedInUser === englishTeacher) { currentUserLanguage = 'en'; } 
+                    // ### CORRECTION ICI ###
+                    // 'englishTeacher' était indéfini, remplacé par 'englishTeachers.includes(loggedInUser)'
+                    else if (englishTeachers.includes(loggedInUser)) { currentUserLanguage = 'en'; } 
                     else { currentUserLanguage = 'fr'; } 
+                    // ### FIN DE LA CORRECTION ###
                     console.log(`Connecté: ${loggedInUser} (Lang: ${currentUserLanguage})`); 
                     if (rememberMeCheckbox.checked) { localStorage.setItem('rememberedUsername', loggedInUser); } 
                     else { localStorage.removeItem('rememberedUsername'); } 
@@ -615,5 +618,6 @@ const isArabicUser = () => currentUserLanguage === 'ar';
 
 </body>
 </html>
+
 
 

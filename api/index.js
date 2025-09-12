@@ -51,7 +51,9 @@ const validUsers = {
   "Abeer": "Abeer","Aichetou": "Aichetou","Amal": "Amal","Amal Najar": "Amal Najar",
   "Ange": "Ange","Anouar": "Anouar","Emen": "Emen","Farah": "Farah","Fatima": "Fatima",
   "Ghadah": "Ghadah","Hana": "Hana","Nada": "Nada","Raghd": "Raghd","Salma": "Salma",
-  "Sara": "Sara","Souha": "Souha","Takwa": "Takwa","Zohra": "Zohra"
+  "Sara": "Sara","Souha": "Souha","Takwa": "Takwa","Zohra": "Zohra",
+  // Ajoutez Mohamed pour qu'il puisse se connecter
+  "Mohamed": "Mohamed"
 };
 
 let cachedDb = null;
@@ -82,8 +84,30 @@ function getDateForDayNameNode(weekStartDate, dayName) {
 
 const findKey = (obj, target) => obj ? Object.keys(obj).find(k => k.trim().toLowerCase() === target.toLowerCase()) : undefined;
 
-// --- Toutes tes routes existantes (login, save-plan, generate-word, excel, etc) ---
-// (elles restent identiques, je n’y touche pas)
+
+// ==========================================================
+// ===== AJOUT DE LA ROUTE DE CONNEXION MANQUANTE (/login) =====
+// ==========================================================
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ success: false, message: "Nom d'utilisateur et mot de passe requis." });
+  }
+
+  // Vérifie si l'utilisateur existe et si le mot de passe est correct
+  // (le mot de passe est le même que le nom d'utilisateur)
+  if (validUsers[username] && validUsers[username] === password) {
+    console.log(`✅ Connexion réussie pour: ${username}`);
+    res.json({ success: true, username: username });
+  } else {
+    console.log(`❌ Échec de la connexion pour: ${username}`);
+    res.status(401).json({ success: false, message: "Nom d'utilisateur ou mot de passe incorrect." });
+  }
+});
+// ==========================================================
+// ================= FIN DE L'AJOUT =========================
+// ==========================================================
 
 
 // ===== ROUTE IA =====

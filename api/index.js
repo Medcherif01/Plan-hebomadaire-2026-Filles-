@@ -1,3 +1,4 @@
+// COPIEZ TOUT LE CONTENU CI-DESSOUS
 const express = require('express');
 const cors = require('cors');
 const fileUpload = require('express-fileupload');
@@ -16,7 +17,7 @@ const MONGO_URL = process.env.MONGO_URL;
 const WORD_TEMPLATE_URL = process.env.WORD_TEMPLATE_URL;
 const LESSON_TEMPLATE_URL = 'https://docs.google.com/document/d/1Gw2NrQAQXuT3_WhIYRdgGTGR1KHI_tDl/export?format=docx';
 let geminiModel;
-if (!MONGO_URL) console.error('FATAL: MONGO_URL n'est pas définie.');
+if (!MONGO_URL) console.error('FATAL: MONGO_URL is not defined.');
 if (process.env.GEMINI_API_KEY) {
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
@@ -114,7 +115,7 @@ prompt = `بصفتك مساعد تعليمي خبير، قم بإنشاء خطة
 التمايز التعليمي::
 [أعط اقتراحاً للطلاب الذين يواجهون صعوبات واقتراحاً للطلاب المتقدمين.]
 
-قم بتنسيق إجابتك حصرياً كنص عادي. لا تستخدم Markdown (لا \`*\`، \`#\`، إلخ). استخدم الشرطات (-) للقوائم النقطية.`;
+قم بتنسيق إجابتك حصرياً كنص عادي. لا تستخدم Markdown (لا \\`*\\`، \\`#\\`، إلخ). استخدم الشرطات (-) للقوائم النقطية.`;
 } else if (languageCode === 'en') {
 prompt = `As an expert educational assistant, generate a detailed lesson plan for a teacher. The context is as follows:
 - Subject: ${matiere}
@@ -143,7 +144,7 @@ Assessment Method::
 Pedagogical Differentiation::
 [Give a suggestion for students with difficulties and a suggestion for advanced students.]
 
-Format your response exclusively as plain text. Do not use Markdown (no \`*\`, \`#\`, etc.). Use dashes (-) for bulleted lists.`;
+Format your response exclusively as plain text. Do not use Markdown (no \\`*\\`, \\`#\\`, etc.). Use dashes (-) for bulleted lists.`;
 } else {
 prompt = `En tant qu'assistant pédagogique expert, génère un plan de leçon détaillé pour un enseignant. Le contexte est le suivant:
 - Matière: ${matiere}
@@ -172,7 +173,7 @@ Méthode d'Évaluation::
 Différenciation Pédagogique::
 [Donne une suggestion pour les élèves en difficulté et une suggestion pour les élèves plus avancés.]
 
-Formatte ta réponse exclusivement en texte brut. N'utilise pas de Markdown (pas de \`*\`, \`#\`, etc.). Utilise des tirets (-) pour les listes à puces.`;
+Formatte ta réponse exclusivement en texte brut. N'utilise pas de Markdown (pas de \\`*\\`, \\`#\\`, etc.). Utilise des tirets (-) pour les listes à puces.`;
 }
 
 const result = await geminiModel.generateContent(prompt);

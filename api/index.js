@@ -1,4 +1,3 @@
-// COPIEZ TOUT LE CONTENU CI-DESSOUS
 const express = require('express');
 const cors = require('cors');
 const fileUpload = require('express-fileupload');
@@ -211,3 +210,4 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 
 // Exporter l'app pour Vercel
 module.exports = app;
+

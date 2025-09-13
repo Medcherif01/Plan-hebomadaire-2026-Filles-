@@ -23,8 +23,9 @@ let geminiModel;
 if (!MONGO_URL) console.error('FATAL: MONGO_URL n\'est pas définie.');
 if (process.env.GEMINI_API_KEY) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
-    console.log('✅ SDK Google Gemini initialisé.');
+    // ===== MODIFICATION ICI : Utilisation d'un modèle compatible =====
+    geminiModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+    console.log('✅ SDK Google Gemini initialisé avec le modèle gemini-pro.');
 } else {
     console.warn('⚠️ GEMINI_API_KEY non défini. La fonctionnalité IA sera désactivée.');
 }

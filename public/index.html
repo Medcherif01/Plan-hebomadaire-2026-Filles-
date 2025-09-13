@@ -95,7 +95,56 @@
             <label for="weekSelector"><i class="fas fa-calendar-week"></i> Semaine:</label> <!-- Icône conservée -->
             <select id="weekSelector" onchange="loadPlanForWeek()">
                  <option value="">-- Sélectionnez une semaine --</option> <!-- Traduit par JS -->
-                 <option value="1">Semaine 1</option><option value="2">Semaine 2</option><option value="3">Semaine 3</option><option value="4">Semaine 4</option><option value="5">Semaine 5</option><option value="6">Semaine 6</option><option value="7">Semaine 7</option><option value="8">Semaine 8</option><option value="9">Semaine 9</option><option value="10">Semaine 10</option><option value="11">Semaine 11</option><option value="12">Semaine 12</option><option value="13">Semaine 13</option><option value="14">Semaine 14</option><option value="15">Semaine 15</option><option value="16">Semaine 16</option><option value="17">Semaine 17</option><option value="18">Semaine 18</option><option value="19">Semaine 19</option><option value="20">Semaine 20</option><option value="21">Semaine 21</option><option value="22">Semaine 22</option><option value="23">Semaine 23</option><option value="24">Semaine 24</option><option value="25">Semaine 25</option><option value="26">Semaine 26</option><option value="27">Semaine 27</option><option value="28">Semaine 28</option><option value="29">Semaine 29</option><option value="30">Semaine 30</option><option value="31">Semaine 31</option><option value="32">Semaine 32</option><option value="33">Semaine 33</option><option value="34">Semaine 34</option><option value="35">Semaine 35</option><option value="36">Semaine 36</option><option value="37">Semaine 37</option><option value="38">Semaine 38</option><option value="39">Semaine 39</option><option value="40">Semaine 40</option><option value="41">Semaine 41</option><option value="42">Semaine 42</option><option value="43">Semaine 43</option><option value="44">Semaine 44</option><option value="45">Semaine 45</option><option value="46">Semaine 46</option><option value="47">Semaine 47</option><option value="48">Semaine 48</option>
+                 <!-- ===== MODIFICATION : SEMAINES 1 à 43 ===== -->
+                 <option value="1">Semaine 1</option>
+                 <option value="2">Semaine 2</option>
+                 <option value="3">Semaine 3</option>
+                 <option value="4">Semaine 4</option>
+                 <option value="5">Semaine 5</option>
+                 <option value="6">Semaine 6</option>
+                 <option value="7">Semaine 7</option>
+                 <option value="8">Semaine 8</option>
+                 <option value="9">Semaine 9</option>
+                 <option value="10">Semaine 10</option>
+                 <option value="11">Semaine 11</option>
+                 <option value="12">Semaine 12</option>
+                 <option value="13">Semaine 13</option>
+                 <option value="14">Semaine 14</option>
+                 <option value="15">Semaine 15</option>
+                 <option value="16">Semaine 16</option>
+                 <option value="17">Semaine 17</option>
+                 <option value="18">Semaine 18</option>
+                 <option value="19">Semaine 19</option>
+                 <option value="20">Semaine 20</option>
+                 <option value="21">Semaine 21</option>
+                 <option value="22">Semaine 22</option>
+                 <option value="23">Semaine 23</option>
+                 <option value="24">Semaine 24</option>
+                 <option value="25">Semaine 25</option>
+                 <option value="26">Semaine 26</option>
+                 <option value="27">Semaine 27</option>
+                 <option value="28">Semaine 28</option>
+                 <option value="29">Semaine 29</option>
+                 <option value="30">Semaine 30</option>
+                 <option value="31">Semaine 31</option>
+                 <option value="32">Semaine 32</option>
+                 <option value="33">Semaine 33</option>
+                 <option value="34">Semaine 34</option>
+                 <option value="35">Semaine 35</option>
+                 <option value="36">Semaine 36</option>
+                 <option value="37">Semaine 37</option>
+                 <option value="38">Semaine 38</option>
+                 <option value="39">Semaine 39</option>
+                 <option value="40">Semaine 40</option>
+                 <option value="41">Semaine 41</option>
+                 <option value="42">Semaine 42</option>
+                 <option value="43">Semaine 43</option>
+                 <!-- ===== FIN MODIFICATION SEMAINES ===== -->
+                 <option value="44">Semaine 44</option> <!-- Options originales conservées -->
+                 <option value="45">Semaine 45</option>
+                 <option value="46">Semaine 46</option>
+                 <option value="47">Semaine 47</option>
+                 <option value="48">Semaine 48</option>
             </select>
         </div>
 
@@ -113,6 +162,7 @@
              </button>
              <span id="file-upload-status" style="font-size: 0.9em;"></span>
              
+             <!-- ===== NOUVELLE SECTION : RAPPORT COMPLET PAR CLASSE ===== -->
              <div class="admin-subsection">
                 <label for="adminReportClassSelector" id="admin-report-class-label"><i class="fas fa-school"></i> Choisir une Classe :</label>
                 <select id="adminReportClassSelector">
@@ -122,6 +172,7 @@
                     <i class="fas fa-file-invoice"></i> <span class="btn-text">Générer Rapport Complet par Classe</span>
                 </button>
              </div>
+             <!-- ===== FIN NOUVELLE SECTION ===== -->
 
              <div style="width: 100%; margin-top: 10px; font-size: 0.85em; color: var(--muted-text); border-top: 1px dashed var(--border-color); padding-top: 10px;">
                  <i class="fas fa-info-circle"></i> **Note:** La fonction d'upload et d'extraction automatique depuis des fichiers Word ou PDF n'est pas implémentée dans cette version. Veuillez utiliser le format Excel pour charger les données via le bouton ci-dessus.
@@ -131,6 +182,8 @@
         <!-- FIN SECTION ADMIN        -->
         <!-- ======================== -->
 
+
+        <!-- Actions principales (Word, Excel, Sauvegarde tout) -->
         <div class="filter-container main-actions-container">
             <button id="generateWordBtn" onclick="generateWordByClasse()" class="action-button pro-button" disabled>
                  <i class="fas fa-file-word"></i> <span class="btn-text">Générer Word par Classe</span> <!-- Traduit par JS -->
@@ -144,6 +197,7 @@
             <a id="downloadLink" style="display:none;"></a>
         </div>
 
+        <!-- Filtres -->
         <div class="filter-container data-filters-container">
              <label for="filterEnseignant" id="filter-enseignant-label"><i class="fas fa-user-tie"></i> Enseignant:</label> <!-- Icône conservée -->
              <select id="filterEnseignant" onchange="sortAndDisplay()"> <option value="">Tous</option> </select>
@@ -160,19 +214,33 @@
              <label for="filterJour" id="filter-jour-label"><i class="fas fa-calendar-day"></i> Jour:</label> <!-- Icône conservée -->
              <select id="filterJour" onchange="sortAndDisplay()">
                  <option value="">Tous</option>
-                 <option value="Dimanche">Dimanche</option><option value="Lundi">Lundi</option><option value="Mardi">Mardi</option><option value="Mercredi">Mercredi</option><option value="Jeudi">Jeudi</option>
+                 <option value="Dimanche">Dimanche</option>
+                 <option value="Lundi">Lundi</option>
+                 <option value="Mardi">Mardi</option>
+                 <option value="Mercredi">Mercredi</option>
+                 <option value="Jeudi">Jeudi</option>
+                 <!-- Options traduites par JS -->
             </select>
         </div>
 
-        <div id="message-alerte" style="display: none;"></div>
-        <div id="progress-bar-container" style="display: none;"><div id="progress-bar">0%</div></div>
 
+        <!-- Zone pour les messages d'alerte (succès/erreur) -->
+        <div id="message-alerte" style="display: none;"></div>
+
+        <!-- Barre de progression -->
+        <div id="progress-bar-container" style="display: none;">
+            <div id="progress-bar">0%</div>
+        </div>
+
+        <!-- Zone de saisie des notes PAR CLASSE -->
          <div class="notes-container">
             <label for="notesClassSelector" id="notes-class-label" style="font-weight: bold;"><i class="fas fa-sticky-note"></i> Notes pour la classe :</label> <!-- Icône conservée -->
             <select id="notesClassSelector" onchange="displayClassNotes()">
                 <option value="">-- Sélectionnez une classe --</option> <!-- Traduit par JS -->
             </select>
+
             <textarea id="notesInput" rows="4" placeholder="Sélectionnez une classe pour voir ou ajouter des notes..." spellcheck="true" disabled dir="auto"></textarea> <!-- Traduit par JS -->
+
             <div style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 5px;">
                 <button id="saveNotesBtn" onclick="saveNotes()" class="action-button pro-button success-button" disabled> <!-- Style conservé -->
                     <i class="fas fa-save"></i> <span class="btn-text">Enregistrer Notes</span> <!-- Traduit par JS -->
@@ -181,28 +249,60 @@
             </div>
         </div>
 
+
+        <!-- Wrapper pour le tableau responsive -->
         <div class="table-responsive-wrapper">
+            <!-- Tableau principal -->
             <table id="planTable">
-                <thead><tr></tr></thead>
+                <thead>
+                    <tr>
+                        <!-- En-têtes générés dynamiquement par JS (createTableHeader) avec traduction -->
+                    </tr>
+                </thead>
                 <tbody>
-                     <tr id="initial-table-row"><td colspan="10" style="text-align:center; padding: 20px; color: grey;" id="initial-table-message">Veuillez sélectionner une semaine pour afficher les données.</td></tr>
+                    <!-- Données générées par JS (displayPlanTable) -->
+                     <!-- Message initial (sera remplacé par JS) -->
+                     <tr id="initial-table-row">
+                         <td colspan="10" style="text-align:center; padding: 20px; color: grey;" id="initial-table-message">
+                             Veuillez sélectionner une semaine pour afficher les données. <!-- Texte traduit par JS -->
+                         </td>
+                     </tr>
                 </tbody>
             </table>
-        </div>
-    </div>
+        </div> <!-- Fin de .table-responsive-wrapper -->
 
+
+    </div> <!-- Fin de #main-content -->
+
+    <!-- ======================== -->
+    <!-- SCRIPT JAVASCRIPT        -->
+    <!-- ======================== -->
     <script>
+        // --- Début Script ---
         console.log("Script principal démarré.");
-        let loggedInUser = null, currentUserLanguage = 'fr', planData = [], filteredAndSortedData = [], uploadedPlanData = null, headers = [], currentWeek = null, weekStartDate = null, weeklyClassNotes = {}, alertTimeoutId = null, incompleteTeachersInfo = {};
 
-        // ===== MODIFICATION : Noms des enseignantes et groupes =====
+        // Variables globales
+        let loggedInUser = null;
+        let currentUserLanguage = 'fr';
+        let planData = [];
+        let filteredAndSortedData = [];
+        let uploadedPlanData = null;
+        let headers = [];
+        let currentWeek = null;
+        let weekStartDate = null;
+        let weeklyClassNotes = {};
+        let alertTimeoutId = null;
+        let incompleteTeachersInfo = {};
+
+        // ===== MODIFIÉ : Nouveaux noms d'enseignants =====
         const arabicTeachers = ['Amal Najar', 'Fatima', 'Ghadah', 'Raghd', 'Sara', 'Emen'];
         const englishTeachers = ['Abeer', 'Salma', 'Amal', 'Hana'];
-        const teachersToHideColumnsFor = new Set(arabicTeachers);
-        const admins = ['Mohamed', 'Zohra'];
+        // Note: La liste ci-dessous doit contenir les mêmes noms que arabicTeachers
+        const teachersToHideColumnsFor = new Set(['Amal Najar', 'Fatima', 'Ghadah', 'Raghd', 'Sara', 'Emen']);
         const isArabicUser = () => currentUserLanguage === 'ar';
 
-         const translations = {
+        // Traductions (complètes et inchangées par rapport à votre original)
+        const translations = {
             fr: { 
                 login_title: "Connexion", login_username_label: "Nom d'utilisateur (Enseignant) :", login_password_label: "Mot de passe (idem Nom) :", login_button_text: "Se connecter", remember_me: "Rester connecté", logout_button: "Déconnecter", main_page_title: "Plans Hebdomadaires", week_label: "Semaine:", select_week: "-- Sélectionnez une semaine --", please_select_week: "Veuillez sélectionner une semaine.", admin_actions_title: "Actions Administrateur", admin_excel_label: "Fichier Excel :", admin_save_button: "Charger et Enregistrer dans la DB", generate_word_button: "Générer Word par Classe", generate_excel_button: "Générer Excel (1 Fichier)", save_all_button: "Enregistrer Lignes Affichées", filter_teacher_label: "Enseignant:", filter_class_label: "Classe:", filter_material_label: "Matière:", filter_period_label: "Période:", filter_day_label: "Jour:", all: "Tous", all_f: "Toutes", day_sun: "Dimanche", day_mon: "Lundi", day_tue: "Mardi", day_wed: "Mercredi", day_thu: "Jeudi", days: ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"], fullDays: ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Sábado"], months: ["Janv", "Fév", "Mars", "Avr", "Mai", "Juin", "Juil", "Août", "Sept", "Oct", "Nov", "Déc"], headers: { 'Leçon': 'Leçon', 'Travaux de classe': 'Travaux de classe', 'Support': 'Support', 'Devoirs': 'Devoirs', 'Enseignant': 'Enseignant', 'Classe': 'Classe', 'Matière': 'Matière', 'Période': 'Période', 'Jour': 'Jour' }, actions: "Actions", updated_at: "Mis à jour", notes_for_class: "Notes pour la classe :", select_class: "-- Sélectionnez une classe --", select_class_placeholder: "Sélectionnez une classe pour voir ou ajouter des notes...", notes_placeholder: "Notes pour {classText}...", save_notes_button: "Enregistrer Notes", saving: "Enregistrement...", saved: "Enregistré", saving_notes_for: "Enregistrement notes pour {class} S{week}", notes_saved_success: "Notes enregistrées pour {class}, S{week}.", error_saving_notes: "Erreur d'enregistrement des notes: {error}", display_incomplete: "Afficher Incomplets", hide_incomplete: "Masquer Incomplets", incomplete_teachers_title: "Enseignants Incomplets (Travaux)", loading: "Chargement...", no_data: "Aucune donnée.", all_complete: "Tout complet!", error_config_columns: "Erreur config colonnes.", welcome_user: "Bienvenue {user} ! Veuillez sélectionner une semaine.", connected_as: "Connecté: {user}", loading_data_week: "Chargement données S{week}...", data_loaded_week: "Données S{week} chargées.", no_data_found_week: "Aucune donnée trouvée pour S{week}.", error_loading_week: "Erreur chargement S{week}: {error}", select_week_to_display: "Veuillez sélectionner une semaine pour afficher les données.", error_structure: "Erreur: Structure de données non définie.", no_data_to_display_filters: "Aucune donnée à afficher avec les filtres actuels.", save_row_title: "Enregistrer cette ligne", invalid_row: "Ligne invalide.", error_saving_row: "Erreur enregistrement ligne: {error}", no_rows_to_save: "Aucune ligne affichée à enregistrer.", confirm_save_all: "Confirmer l'enregistrement des {count} lignes affichées pour la S{week}?", save_all_cancelled: "Enregistrement annulé.", saving_all_displayed: "Enregistrement des {count} lignes en cours...", save_all_success: "{count} lignes enregistrées avec succès.", save_all_partial: "Enregistrement terminé: {success} succès, {error} erreurs.", generating_word: "Génération de {count} document(s) Word...", generating_word_success: "{count} document(s) Word généré(s).", generating_word_partial: "Génération Word terminée: {ok} succès, {err} erreurs.", generating_word_failed: "Échec de la génération Word ({err} erreurs).", generating_excel: "Génération du fichier Excel S{week}...", generating_excel_success: "Fichier Excel '{filename}' généré.", error_generating_excel: "Erreur génération Excel: {error}", no_file_selected: "Aucun fichier sélectionné.", reading_file: "Lecture du fichier {fileName}...", file_read_success: "Fichier {fileName} lu ({count} lignes).", file_error: "Erreur lecture fichier: {error}", invalid_file_type: "Type de fichier invalide (.xlsx ou .xls requis).", saving_uploaded_data: "Enregistrement des données chargées pour S{week}...", uploaded_data_saved: "Données chargées enregistrées pour S{week}.", uploaded_data_error: "Erreur enregistrement données chargées: {error}", no_word_dates: "Génération Word: Dates manquantes côté serveur pour la semaine S{week}.",
                 generate_ai_lesson_plan_button: "Plan de Leçon (IA)", generating_ai_lesson_plan: "Génération du plan de leçon IA...", error_generating_ai_lesson_plan: "Erreur génération plan IA: {error}", ai_lesson_plan_generated: "Plan de leçon IA généré.",
@@ -284,8 +384,8 @@
         async function fetchPlanData(week) { if (!week || isNaN(parseInt(week, 10))) { console.warn("fetchPlanData sans semaine valide."); displayPlanTable([]); document.getElementById('weekDateRange').textContent = t('please_select_week'); return; } if (!loggedInUser) { console.warn("Tentative chargement non connecté."); displayAlert("login_title", true); return; } console.log(`fetchPlanData S${week} pour ${loggedInUser}`); displayAlert('loading_data_week', false, { week: week }); showProgressBar(); updateProgressBar(10); currentWeek = week; const weekNum=parseInt(week,10); const dateRangeEl=document.getElementById('weekDateRange'); weekStartDate=null; planData=[]; headers=[]; weeklyClassNotes={}; dateRangeEl.textContent=`${t('week_label')} ${week}: ${t('loading')}`; displayPlanTable([]); updateActionButtonsState(false); const dates=specificWeekDateRanges[weekNum]; if(dates?.start&&dates?.end){try{const s=new Date(dates.start+'T00:00:00Z'); const e=new Date(dates.end+'T00:00:00Z'); if(!isNaN(s.getTime())&&!isNaN(e.getTime())){ weekStartDate=s; dateRangeEl.textContent = `${t('week_label')} ${week} : ${isArabicUser() ? 'من' : (currentUserLanguage === 'en' ? 'from' : 'du')} ${formatDateForDisplay(s)} ${isArabicUser() ? 'إلى' : (currentUserLanguage === 'en' ? 'to' : 'à')} ${formatDateForDisplay(e)}`;} else throw new Error();}catch(e){dateRangeEl.textContent=`S ${week} (Err dates)`; weekStartDate=null;}} else {dateRangeEl.textContent=`${t('week_label')} ${week} (${t('no_data')}: dates non définies)`; weekStartDate=null;} updateProgressBar(30); try{const r=await fetch(`/api/plans/${week}`); updateProgressBar(70); if(!r.ok){const d=await r.json().catch(()=>null); throw new Error(d?.message || `Err ${r.status}`);} const fetched=await r.json(); if(fetched&&typeof fetched==='object'){planData=fetched.planData||[]; weeklyClassNotes=fetched.classNotes||{};} else {planData=[]; weeklyClassNotes={};} updateProgressBar(90); if(planData.length>0){headers=Object.keys(planData[0]).filter(h=>h!=='_id'&&h!=='id'); displayAlert('data_loaded_week', false, { week: week });} else {headers=[]; displayAlert('no_data_found_week', false, { week: week });} createTableHeader(); populateFilterOptions(); populateNotesClassSelector(); sortAndDisplay(); displayClassNotes(); checkAndDisplayIncompleteTeachers(); updateActionButtonsState(planData.length > 0); updateProgressBar(100); } catch(e){ console.error("Err fetchPlanData:",e); displayAlert('error_loading_week', true, { week: week, error: e.message }); planData=[]; headers=[]; weeklyClassNotes={}; createTableHeader(); populateFilterOptions(); populateNotesClassSelector(); sortAndDisplay(); displayClassNotes(); checkAndDisplayIncompleteTeachers(); updateProgressBar(0); updateActionButtonsState(false); } finally{hideProgressBar();} }
         function createTableHeader() { const tHead = document.querySelector('#planTable thead tr'); tHead.innerHTML = ''; const curH = headers || []; const hDisp = curH.filter(h => h !== '_id' && h !== 'id' && h.toLowerCase() !== 'updatedat'); const headerTranslations = translations[currentUserLanguage].headers || translations.fr.headers; const leconKey = findHKey('Leçon'); const supportKey = findHKey('Support'); if (hDisp.length > 0) { hDisp.forEach(h => { if (loggedInUser && teachersToHideColumnsFor.has(loggedInUser) && (h === leconKey || h === supportKey)) { return; } const th = document.createElement('th'); th.textContent = headerTranslations[h] || h; tHead.appendChild(th); }); const actTh = document.createElement('th'); actTh.textContent = t('actions'); actTh.classList.add('actions-column'); tHead.appendChild(actTh); if (curH.some(h => h.toLowerCase() === 'updatedat')) { const updTh = document.createElement('th'); updTh.textContent = t('updated_at'); updTh.classList.add('updated-at-column'); tHead.appendChild(updTh); } } const tBody = document.querySelector('#planTable tbody'); tBody.innerHTML = ''; }
         function updateFilterOptionDefaultTexts() { const filters = [ { selId: 'filterEnseignant', defaultKey: 'all' }, { selId: 'filterClasse', defaultKey: 'all_f' }, { selId: 'filterMatiere', defaultKey: 'all_f' }, { selId: 'filterPeriode', defaultKey: 'all_f' }, { selId: 'filterJour', defaultKey: 'all' }, { selId: 'weekSelector', defaultKey: 'select_week' }, { selId: 'notesClassSelector', defaultKey: 'select_class' } ]; filters.forEach(f => { const select = document.getElementById(f.selId); if (select) { const defaultOption = select.querySelector('option[value=""]'); if (defaultOption) { defaultOption.textContent = t(f.defaultKey); } } }); const jSel = document.getElementById('filterJour'); if (jSel) { const dayOptions = jSel.querySelectorAll('option'); const dayValues = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi"]; const dayTransKeys = ["day_sun", "day_mon", "day_tue", "day_wed", "day_thu"]; dayOptions.forEach(opt => { if (opt.value !== "") { const idx = dayValues.indexOf(opt.value); if (idx !== -1) opt.textContent = t(dayTransKeys[idx]); } }); } const weekSel = document.getElementById('weekSelector'); if (weekSel) { const weekOptions = weekSel.querySelectorAll('option'); weekOptions.forEach(opt => { if (opt.value && opt.value.match(/^\d+$/)) { const weekLabel = t('week_label'); opt.textContent = `${weekLabel.replace(':', '')} ${opt.value}`; } }); } }
-        function populateFilterOptions() { const data = planData || []; const getUniq = (k) => { const uniq = new Set(); data.forEach(i => { if (i && i[k] != null && i[k] !== '') { uniq.add(i[k]); } }); if (k?.trim().toLowerCase() === 'classe') { return [...uniq].sort(compareClasses); } else { return [...uniq].sort((a, b) => String(a).localeCompare(String(b))); } }; const ensK = findHKey('Enseignant'); const clsK = findHKey('Classe'); const perK = findHKey('Période'); const matK = findHKey('Matière'); const ens = ensK ? getUniq(ensK) : []; const cls = clsK ? getUniq(clsK) : []; const per = perK ? getUniq(perK) : []; const mat = matK ? getUniq(matK) : []; const updateSel = (id, opts, isCls = false) => { const sel = document.getElementById(id); const curV = sel.value; const defaultOptHTML = sel.querySelector('option[value=""]')?.outerHTML || `<option value="">${t(isCls ? 'all_f' : 'all')}</option>`; sel.innerHTML = defaultOptHTML; opts.forEach(o => { const opt = document.createElement('option'); opt.value = o; if (isCls) { const ar = classTranslations[o]; opt.textContent = ar ? `${ar} (${o})` : o; } else { opt.textContent = o; } sel.appendChild(opt); }); if (opts.includes(curV)) { sel.value = curV; } else { sel.value = ""; } }; updateSel('filterEnseignant', ens); updateSel('filterClasse', cls, true); updateSel('filterPeriode', per); updateSel('filterMatiere', mat); updateFilterOptionDefaultTexts(); const filterEnsSelect = document.getElementById('filterEnseignant'); if (loggedInUser && loggedInUser !== 'Mohamed') { filterEnsSelect.value = loggedInUser; filterEnsSelect.disabled = true; } else { filterEnsSelect.disabled = false; } }
-        function sortAndDisplay() { const filterEnsSelect = document.getElementById('filterEnseignant'); if (loggedInUser && loggedInUser !== 'Mohamed') { filterEnsSelect.value = loggedInUser; filterEnsSelect.disabled = true; } else { filterEnsSelect.disabled = false; } const ensF = filterEnsSelect.value; const clsF = document.getElementById('filterClasse').value; const matF = document.getElementById('filterMatiere').value; const perF = document.getElementById('filterPeriode').value; const jF = document.getElementById('filterJour').value; const ensK = findHKey('Enseignant'); const clsK = findHKey('Classe'); const matK = findHKey('Matière'); const perK = findHKey('Période'); const jK = findHKey('Jour'); filteredAndSortedData = planData.filter(i => { if (!i) return false; const iE = ensK && i.hasOwnProperty(ensK) ? String(i[ensK]) : null; const iC = clsK && i.hasOwnProperty(clsK) ? String(i[clsK]) : null; const iM = matK && i.hasOwnProperty(matK) ? String(i[matK]) : null; const iP = perK && i.hasOwnProperty(perK) ? String(i[perK]) : null; const iJ = jK && i.hasOwnProperty(jK) ? String(i[jK]) : null; const pE = !ensF || iE === ensF; const pC = !clsF || iC === clsF; const pM = !matF || iM === matF; const pP = !perF || iP === perF; const pJ = !jF || iJ === jF; return pE && pC && pM && pP && pJ; }); const dayValuesFr = { "Dimanche": 1, "Lundi": 2, "Mardi": 3, "Mercredi": 4, "Jeudi": 5 }; filteredAndSortedData.sort((a, b) => { const classA = (clsK && a.hasOwnProperty(clsK)) ? a[clsK] : null; const classB = (clsK && b.hasOwnProperty(clsK)) ? b[clsK] : null; const classComp = compareClasses(classA, classB); if (classComp !== 0) return classComp; const jA_fr = (jK && a.hasOwnProperty(jK)) ? String(a[jK]) : null; const jB_fr = (jK && b.hasOwnProperty(jK)) ? String(b[jK]) : null; const dayOrdA = dayValuesFr[jA_fr] || 99; const dayOrdB = dayValuesFr[jB_fr] || 99; const dC = dayOrdA - dayOrdB; if (dC !== 0) return dC; const pA = (perK && a.hasOwnProperty(perK)) ? a[perK] : null; const pB = (perK && b.hasOwnProperty(perK)) ? b[perK] : null; const piA = parseInt(pA, 10); const piB = parseInt(pB, 10); if (!isNaN(piA) && !isNaN(piB)) { return piA - piB; } else { const sA = pA == null ? '' : String(pA); const sB = pB == null ? '' : String(pB); return sA.localeCompare(sB); } }); displayPlanTable(filteredAndSortedData); updateActionButtonsState(filteredAndSortedData.length > 0); }
+        function populateFilterOptions() { const data = planData || []; const getUniq = (k) => { const uniq = new Set(); data.forEach(i => { if (i && i[k] != null && i[k] !== '') { uniq.add(i[k]); } }); if (k?.trim().toLowerCase() === 'classe') { return [...uniq].sort(compareClasses); } else { return [...uniq].sort((a, b) => String(a).localeCompare(String(b))); } }; const ensK = findHKey('Enseignant'); const clsK = findHKey('Classe'); const perK = findHKey('Période'); const matK = findHKey('Matière'); const ens = ensK ? getUniq(ensK) : []; const cls = clsK ? getUniq(clsK) : []; const per = perK ? getUniq(perK) : []; const mat = matK ? getUniq(matK) : []; const updateSel = (id, opts, isCls = false) => { const sel = document.getElementById(id); const curV = sel.value; const defaultOptHTML = sel.querySelector('option[value=""]')?.outerHTML || `<option value="">${t(isCls ? 'all_f' : 'all')}</option>`; sel.innerHTML = defaultOptHTML; opts.forEach(o => { const opt = document.createElement('option'); opt.value = o; if (isCls) { const ar = classTranslations[o]; opt.textContent = ar ? `${ar} (${o})` : o; } else { opt.textContent = o; } sel.appendChild(opt); }); if (opts.includes(curV)) { sel.value = curV; } else { sel.value = ""; } }; updateSel('filterEnseignant', ens); updateSel('filterClasse', cls, true); updateSel('filterPeriode', per); updateSel('filterMatiere', mat); updateFilterOptionDefaultTexts(); const filterEnsSelect = document.getElementById('filterEnseignant'); if (loggedInUser && loggedInUser !== 'Mohamed' && loggedInUser !== 'Zohra') { filterEnsSelect.value = loggedInUser; filterEnsSelect.disabled = true; } else { filterEnsSelect.disabled = false; } }
+        function sortAndDisplay() { const filterEnsSelect = document.getElementById('filterEnseignant'); if (loggedInUser && loggedInUser !== 'Mohamed' && loggedInUser !== 'Zohra') { filterEnsSelect.value = loggedInUser; filterEnsSelect.disabled = true; } else { filterEnsSelect.disabled = false; } const ensF = filterEnsSelect.value; const clsF = document.getElementById('filterClasse').value; const matF = document.getElementById('filterMatiere').value; const perF = document.getElementById('filterPeriode').value; const jF = document.getElementById('filterJour').value; const ensK = findHKey('Enseignant'); const clsK = findHKey('Classe'); const matK = findHKey('Matière'); const perK = findHKey('Période'); const jK = findHKey('Jour'); filteredAndSortedData = planData.filter(i => { if (!i) return false; const iE = ensK && i.hasOwnProperty(ensK) ? String(i[ensK]) : null; const iC = clsK && i.hasOwnProperty(clsK) ? String(i[clsK]) : null; const iM = matK && i.hasOwnProperty(matK) ? String(i[matK]) : null; const iP = perK && i.hasOwnProperty(perK) ? String(i[perK]) : null; const iJ = jK && i.hasOwnProperty(jK) ? String(i[jK]) : null; const pE = !ensF || iE === ensF; const pC = !clsF || iC === clsF; const pM = !matF || iM === matF; const pP = !perF || iP === perF; const pJ = !jF || iJ === jF; return pE && pC && pM && pP && pJ; }); const dayValuesFr = { "Dimanche": 1, "Lundi": 2, "Mardi": 3, "Mercredi": 4, "Jeudi": 5 }; filteredAndSortedData.sort((a, b) => { const classA = (clsK && a.hasOwnProperty(clsK)) ? a[clsK] : null; const classB = (clsK && b.hasOwnProperty(clsK)) ? b[clsK] : null; const classComp = compareClasses(classA, classB); if (classComp !== 0) return classComp; const jA_fr = (jK && a.hasOwnProperty(jK)) ? String(a[jK]) : null; const jB_fr = (jK && b.hasOwnProperty(jK)) ? String(b[jK]) : null; const dayOrdA = dayValuesFr[jA_fr] || 99; const dayOrdB = dayValuesFr[jB_fr] || 99; const dC = dayOrdA - dayOrdB; if (dC !== 0) return dC; const pA = (perK && a.hasOwnProperty(perK)) ? a[perK] : null; const pB = (perK && b.hasOwnProperty(perK)) ? b[perK] : null; const piA = parseInt(pA, 10); const piB = parseInt(pB, 10); if (!isNaN(piA) && !isNaN(piB)) { return piA - piB; } else { const sA = pA == null ? '' : String(pA); const sB = pB == null ? '' : String(pB); return sA.localeCompare(sB); } }); displayPlanTable(filteredAndSortedData); updateActionButtonsState(filteredAndSortedData.length > 0); }
 
         function displayPlanTable(data) {
             const tBody = document.querySelector('#planTable tbody');
@@ -447,7 +547,7 @@
                 if (response.ok && result.success) { 
                     loggedInUser = result.username; 
                     if (arabicTeachers.includes(loggedInUser)) { currentUserLanguage = 'ar'; } 
-                    else if (loggedInUser === englishTeacher) { currentUserLanguage = 'en'; } 
+                    else if (englishTeachers.includes(loggedInUser)) { currentUserLanguage = 'en'; } 
                     else { currentUserLanguage = 'fr'; } 
                     console.log(`Connecté: ${loggedInUser} (Lang: ${currentUserLanguage})`); 
                     if (rememberMeCheckbox.checked) { localStorage.setItem('rememberedUsername', loggedInUser); } 
@@ -456,7 +556,7 @@
                     document.getElementById('main-content').style.display = 'block'; 
                     applyLanguageSettings(); 
                     document.getElementById('loggedInUserInfo').textContent = t('connected_as', { user: loggedInUser }); 
-                    if (loggedInUser === 'Mohamed') { 
+                    if (loggedInUser === 'Mohamed' || loggedInUser === 'Zohra') { 
                         document.getElementById('admin-actions').style.display = 'flex'; 
                         populateAdminReportClassSelector();
                     } else { 

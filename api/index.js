@@ -95,7 +95,19 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         const support = rowData[findKey(rowData, 'Support')] || 'Non spécifié';
         const travaux = rowData[findKey(rowData, 'Travaux de classe')] || 'Non spécifié';
         const devoirsPrevus = rowData[findKey(rowData, 'Devoirs')] || 'Non spécifié';
-
+        // === DÉBUT DE LA CORRECTION POUR LA DATE ===
+        let formattedDate = "";
+        const datesNode = specificWeekDateRangesNode[weekNumber];
+        if (jour && datesNode?.start) {
+            const weekStartDateNode = new Date(datesNode.start + 'T00:00:00Z');
+            if (!isNaN(weekStartDateNode.getTime())) {
+                const dateOfDay = getDateForDayNameNode(weekStartDateNode, jour);
+                if (dateOfDay) {
+                    formattedDate = formatDateFrenchNode(dateOfDay);
+                }
+            }
+        }
+        // === FIN DE LA CORRECTION POUR LA DATE ===
         let prompt;
         // Nouvelle structure JSON demandée à l'IA, incluant un tableau d'étapes
         const jsonStructure = `{
@@ -207,5 +219,6 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 });
 
 module.exports = app;
+
 
 

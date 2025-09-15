@@ -41,7 +41,7 @@ const validUsers = {
     "Amal": "Amal", "Amal Najar": "Amal Najar", "Ange": "Ange", "Anouar": "Anouar",
     "Emen": "Emen", "Farah": "Farah", "Fatima": "Fatima", "Ghadah": "Ghadah",
     "Hana": "Hana", "Nada": "Nada", "Raghd": "Raghd", "Salma": "Salma",
-    "Sara": "Sara", "Souha": "Souha", "Inas": "Inas"
+    "Sara": "Sara", "Souha": "Souha", "Inas": "Inas", "Takwa": "Takwa"
 };
 
 let cachedDb = null;
@@ -207,4 +207,5 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 });
 
 module.exports = app;
+
 

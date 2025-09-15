@@ -204,11 +204,10 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         doc.render(templateData);
 
         const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
-        const filename = `Plan_de_lecon_S${week}_${matiere.replace(/[^a-z0-9]/gi, '_')}.docx`;
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        const filename = `Plan de leçon - ${matiere} - ${seance} - S${week} - ${classe}.docx`;
+                res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.send(buf);
-
     } catch (error) {
         console.error('❌ Erreur serveur /generate-ai-lesson-plan:', error);
         if (!res.headersSent) {
@@ -219,6 +218,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 });
 
 module.exports = app;
+
 
 
 

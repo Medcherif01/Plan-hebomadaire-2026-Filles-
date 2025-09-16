@@ -201,35 +201,19 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 
         const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
         
-        /**
-         * Nettoie une chaîne de caractères pour l'utiliser dans un nom de fichier.
-         * Supprime les accents, remplace les espaces par des tirets,
-         * et supprime tous les autres caractères non alphanumériques.
-         * @param {string | number} str La chaîne à nettoyer.
-         * @returns {string} La chaîne nettoyée.
-         */
         const sanitizeForFilename = (str) => {
             if (typeof str !== 'string') str = String(str);
-            // Sépare les caractères de leurs accents, puis supprime les accents
             const normalized = str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            // Remplace les espaces et les caractères non valides
             return normalized
-                .replace(/\s+/g, '-') // Remplace les espaces par des tirets
-                .replace(/[^a-zA-Z0-9-]/g, '_') // Remplace les caractères invalides par un underscore
-                .replace(/__+/g, '_'); // Évite les underscores multiples
+                .replace(/\s+/g, '-')
+                .replace(/[^a-zA-Z0-9-]/g, '_')
+                .replace(/__+/g, '_');
         };
         
-        // ========================================================================
-        // ========= DÉBUT DE LA CORRECTION APPLIQUÉE =========
-        // ========================================================================
-        
-        // On construit un nom de fichier sûr en appliquant la fonction de nettoyage
-        // à TOUTES les variables, y compris "lecon" qui causait l'erreur.
-        const filename = `Plan-de-lecon--${sanitizeForFilename(classe)}-S${seance}-S${weekNumber}.docx`;
-        
-        // ========================================================================
-        // ========= FIN DE LA CORRECTION APPLIQUÉE =========
-        // ========================================================================
+        // ===== MODIFICATION : NOM DE FICHIER =====
+        // Correction pour correspondre au format demandé et éviter les erreurs de caractères.
+        const filename = `Plan de lecon-${sanitizeForFilename(seance)}-${sanitizeForFilename(classe)}-Semaine${weekNumber}.docx`;
+        // ===== FIN DE LA MODIFICATION =====
         
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -245,6 +229,3 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 });
 
 module.exports = app;
-
-
-

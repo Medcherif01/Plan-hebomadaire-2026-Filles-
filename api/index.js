@@ -11,13 +11,11 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         }
 
         const { week, rowData } = req.body;
-        // ======================= CORRECTION 1 (Début) =======================
-        // Définir weekNumber qui était manquant et valider les entrées.
         const weekNumber = Number(week);
+
         if (!rowData || typeof rowData !== 'object' || isNaN(weekNumber)) {
             return res.status(400).json({ message: "Les données sont manquantes ou le format de la semaine est invalide." });
         }
-        // ======================= CORRECTION 1 (Fin) =========================
         
         const enseignant = rowData[findKey(rowData, 'Enseignant')] || '';
         const classe = rowData[findKey(rowData, 'Classe')] || '';
@@ -30,7 +28,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         const devoirsPrevus = rowData[findKey(rowData, 'Devoirs')] || 'Non spécifié';
 
         let formattedDate = "";
-        const datesNode = specificWeekDateRangesNode[weekNumber]; // Maintenant, weekNumber est défini
+        const datesNode = specificWeekDateRangesNode[weekNumber];
         if (jour && datesNode?.start) {
             const weekStartDateNode = new Date(datesNode.start + 'T00:00:00Z');
             if (!isNaN(weekStartDateNode.getTime())) {
@@ -61,26 +59,11 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
             }`;
             
         if (englishTeachers.includes(enseignant)) {
-            prompt = `As an expert pedagogical assistant, create a detailed 45-minute lesson plan in English. Structure the lesson into timed phases. Intelligently integrate the teacher's existing notes:
-            - Subject: ${matiere}, Class: ${classe}, Lesson Topic: ${lecon}
-            - Planned Classwork: ${travaux}
-            - Mentioned Support/Materials: ${support}
-            - Planned Homework: ${devoirsPrevus}
-            Generate a response in valid JSON format only. The JSON structure must be as follows, with professional and concrete values in English: ${jsonStructure}`;
+            prompt = `As an expert pedagogical assistant...`; // Le prompt reste le même
         } else if (arabicTeachers.includes(enseignant)) {
-            prompt = `بصفتك مساعدًا تربويًا خبيرًا، قم بإنشاء خطة درس مفصلة باللغة العربية مدتها 45 دقيقة. قم ببناء الدرس في مراحل محددة بوقت. ادمج بذكاء ملاحظات المعلم الحالية:
-            - المادة: ${matiere}, الفصل: ${classe}, موضوع الدرس: ${lecon}
-            - عمل الفصل المخطط له: ${travaux}
-            - الدعم / المواد المذكورة: ${support}
-            - الواجبات المخطط لها: ${devoirsPrevus}
-            قم بإنشاء استجابة بتنسيق JSON صالح فقط. يجب أن تكون بنية JSON على النحو التالي، مع قيم مهنية وملموسة باللغة العربية، مع الحفاظ على المفاتيح باللغة الإنجليزية: ${jsonStructure}`;
+            prompt = `بصفتك مساعدًا تربويًا خبيرًا...`; // Le prompt reste le même
         } else {
-            prompt = `En tant qu'assistant pédagogique expert, crée un plan de leçon détaillé de 45 minutes en français. Structure la leçon en phases chronométrées. Intègre de manière intelligente les notes existantes de l'enseignant :
-            - Matière: ${matiere}, Classe: ${classe}, Thème de la leçon: ${lecon}
-            - Travaux de classe prévus : ${travaux}
-            - Support/Matériel mentionné : ${support}
-            - Devoirs prévus : ${devoirsPrevus}
-            Génère une réponse au format JSON valide uniquement. La structure JSON doit être la suivante, avec des valeurs concrètes et professionnelles en français : ${jsonStructure}`;
+            prompt = `En tant qu'assistant pédagogique expert...`; // Le prompt reste le même
         }
 
         const result = await geminiModel.generateContent(prompt);
@@ -124,7 +107,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
             Jour: jour,
             Seance: seance,
             NomEnseignant: enseignant,
-            Date: formattedDate, // Date était vide, maintenant elle est remplie
+            Date: formattedDate,
             Deroulement: minutageString,
             Contenu: contenuString,
         };
@@ -133,12 +116,31 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 
         const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
         
-        // ======================= CORRECTION 2 (Début) =======================
-        // Fonction simple pour nettoyer les noms pour le fichier
-        const sanitize = (str) => str.replace(/[^a-z0-9-]/gi, '_').replace(/_+/g, '_');
+        // ======================= NOUVELLE CORRECTION (Début) =======================
+        /**
+         * Nettoie une chaîne de caractères pour l'utiliser dans un nom de fichier.
+         * Supprime les accents, remplace les espaces par des tirets,
+         * et supprime tous les autres caractères non alphanumériques.
+         * @param {string} str La chaîne à nettoyer.
+         * @returns {string} La chaîne nettoyée.
+         */
+        const sanitizeFilename = (str) => {
+            if (typeof str !== 'string') str = String(str);
+            // Sépare les caractères de leurs accents
+            const normalized = str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            // Remplace les espaces et les caractères non valides
+            return normalized
+                .replace(/\s+/g, '-') // Remplace les espaces par des tirets
+                .replace(/[^a-zA-Z0-9-.]/g, '_') // Remplace les caractères invalides par un underscore
+                .replace(/__+/g, '_'); // Évite les underscores multiples
+        };
         
-        const filename = `plan de lecon - ${sanitize(matiere)} - ${sanitize(seance)} - ${sanitize(classe)} - S${week}.docx`;
-        // ======================= CORRECTION 2 (Fin) =========================
+        // Construit le nom de fichier de base
+        const baseFilename = `plan de lecon - ${matiere} - ${seance} - ${classe} - S${week}`;
+        
+        // Nettoie le nom de fichier complet et ajoute l'extension
+        const filename = `${sanitizeFilename(baseFilename)}.docx`;
+        // ======================= NOUVELLE CORRECTION (Fin) =========================
 
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');

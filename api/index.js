@@ -54,25 +54,8 @@ async function connectToDatabase() {
     return db;
 }
 
-function formatDateFrenchNode(date) { 
-    if (!date || isNaN(date.getTime())) return "Date invalide"; 
-    const days = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"]; 
-    const months = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]; 
-    const dayName = days[date.getUTCDay()]; 
-    const dayNum = String(date.getUTCDate()).padStart(2, '0'); 
-    const monthName = months[date.getUTCMonth()]; 
-    const yearNum = date.getUTCFullYear(); 
-    return `${dayName} ${dayNum} ${monthName} ${yearNum}`; 
-}
-function getDateForDayNameNode(weekStartDate, dayName) { 
-    if (!weekStartDate || isNaN(weekStartDate.getTime())) return null; 
-    const dayOrder = { "Dimanche": 0, "Lundi": 1, "Mardi": 2, "Mercredi": 3, "Jeudi": 4 }; 
-    const offset = dayOrder[dayName]; 
-    if (offset === undefined) return null; 
-    const specificDate = new Date(Date.UTC(weekStartDate.getUTCFullYear(), weekStartDate.getUTCMonth(), weekStartDate.getUTCDate())); 
-    specificDate.setUTCDate(specificDate.getUTCDate() + offset); 
-    return specificDate; 
-}
+function formatDateFrenchNode(date) { if (!date || isNaN(date.getTime())) return "Date invalide"; const days = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"]; const months = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]; const dayName = days[date.getUTCDay()]; const dayNum = String(date.getUTCDate()).padStart(2, '0'); const monthName = months[date.getUTCMonth()]; const yearNum = date.getUTCFullYear(); return `${dayName} ${dayNum} ${monthName} ${yearNum}`; }
+function getDateForDayNameNode(weekStartDate, dayName) { if (!weekStartDate || isNaN(weekStartDate.getTime())) return null; const dayOrder = { "Dimanche": 0, "Lundi": 1, "Mardi": 2, "Mercredi": 3, "Jeudi": 4 }; const offset = dayOrder[dayName]; if (offset === undefined) return null; const specificDate = new Date(Date.UTC(weekStartDate.getUTCFullYear(), weekStartDate.getUTCMonth(), weekStartDate.getUTCDate())); specificDate.setUTCDate(specificDate.getUTCDate() + offset); return specificDate; }
 const findKey = (obj, target) => obj ? Object.keys(obj).find(k => k.trim().toLowerCase() === target.toLowerCase()) : undefined;
 
 // Les routes de base ne changent pas...
@@ -112,22 +95,9 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         const support = rowData[findKey(rowData, 'Support')] || 'Non spécifié';
         const travaux = rowData[findKey(rowData, 'Travaux de classe')] || 'Non spécifié';
         const devoirsPrevus = rowData[findKey(rowData, 'Devoirs')] || 'Non spécifié';
-        
-        let formattedDate = "";
-        // Assurez-vous que `week` est un nombre pour accéder à `specificWeekDateRangesNode`
-        const weekNumber = parseInt(week, 10); 
-        const datesNode = specificWeekDateRangesNode[weekNumber];
-        if (jour && datesNode?.start) {
-            const weekStartDateNode = new Date(datesNode.start + 'T00:00:00Z');
-            if (!isNaN(weekStartDateNode.getTime())) {
-                const dateOfDay = getDateForDayNameNode(weekStartDateNode, jour);
-                if (dateOfDay) {
-                    formattedDate = formatDateFrenchNode(dateOfDay); // Produit "Jour DD Mois AAAA"
-                }
-            }
-        }
-        
+
         let prompt;
+        // Nouvelle structure JSON demandée à l'IA, incluant un tableau d'étapes
         const jsonStructure = `{
               "TitreUnite": "un titre d'unité pertinent pour la leçon",
               "Methodes": "liste des méthodes d'enseignement",
@@ -194,10 +164,13 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         const zip = new PizZip(templateBuffer);
         const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, nullGetter: () => "" });
 
+        // Traitement du tableau "etapes" pour l'adapter aux colonnes du Word
         let minutageString = "";
         let contenuString = "";
         if (aiData.etapes && Array.isArray(aiData.etapes)) {
+            // Crée une chaîne de caractères pour la colonne "Minutage"
             minutageString = aiData.etapes.map(e => e.duree || "").join('\n');
+            // Crée une chaîne de caractères pour la colonne "Contenu"
             contenuString = aiData.etapes.map(e => `▶ ${e.phase || ""}:\n${e.activite || ""}`).join('\n\n');
         }
 
@@ -210,7 +183,8 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
             Jour: jour,
             Seance: seance,
             NomEnseignant: enseignant,
-            Date: formattedDate, // <= Utilisation de la date formatée ici
+            Date: "",
+            // On remplace les champs du template par nos chaînes de caractères formatées
             Deroulement: minutageString,
             Contenu: contenuString,
         };
@@ -218,20 +192,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         doc.render(templateData);
 
         const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
-        
-        // =================================================================
-        // ==================== LIGNE MODIFIÉE CI-DESSOUS ====================
-        // =================================================================
-        // Nettoyer les caractères spéciaux pour le nom de fichier si nécessaire
-        const safeMatiere = matiere.replace(/[^a-z0-9àâéèêëîïôûùüÿçœæÀÂÉÈÊËÎÏÔÛÙÜŸÇŒÆ\s-]/gi, '').trim();
-        const safeSeance = seance.replace(/[^a-z0-9àâéèêëîïôûùüÿçœæÀÂÉÈÊËÎÏÔÛÙÜŸÇŒÆ\s-]/gi, '').trim();
-        const safeClasse = classe.replace(/[^a-z0-9àâéèêëîïôûùüÿçœæÀÂÉÈÊËÎÏÔÛÙÜŸÇŒÆ\s-]/gi, '').trim();
-        
-        const filename = `Plan de leçon - ${safeMatiere} - ${safeSeance} - S${week} - ${safeClasse}.docx`;
-        // =================================================================
-        // ==================== FIN DE LA MODIFICATION =====================
-        // =================================================================
-        
+        const filename = `Plan_de_lecon_S${week}_${matiere.replace(/[^a-z0-9]/gi, '_')}.docx`;
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.send(buf);

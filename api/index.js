@@ -225,7 +225,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         
         // On construit un nom de fichier sûr en appliquant la fonction de nettoyage
         // à TOUTES les variables, y compris "lecon" qui causait l'erreur.
-        const filename = `Plan-de-lecon--${sanitizeForFilename(classe)}-S${seanceNumber}-S${weekNumber}.docx`;
+        const filename = `Plan-de-lecon--${sanitizeForFilename(classe)}-S${seance}-S${weekNumber}.docx`;
         
         // ========================================================================
         // ========= FIN DE LA CORRECTION APPLIQUÉE =========
@@ -245,5 +245,6 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 });
 
 module.exports = app;
+
 
 

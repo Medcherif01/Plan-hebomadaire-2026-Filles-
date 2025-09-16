@@ -219,9 +219,17 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
                 .replace(/__+/g, '_'); // Évite les underscores multiples
         };
         
-        // Construction du nom de fichier en utilisant "lecon" SANS accent
-        // et en nettoyant chaque partie variable avec la fonction sanitize.
-        const filename = `plan de lecon - ${sanitizeForFilename(matiere)} - ${sanitizeForFilename(seance)} - ${sanitizeForFilename(classe)} - S${week}.docx`;
+        // ========================================================================
+        // ========= DÉBUT DE LA CORRECTION APPLIQUÉE =========
+        // ========================================================================
+        
+        // On construit un nom de fichier sûr en appliquant la fonction de nettoyage
+        // à TOUTES les variables, y compris "lecon" qui causait l'erreur.
+        const filename = `Plan-de-lecon-${sanitizeForFilename(lecon)}-${sanitizeForFilename(classe)}-S${weekNumber}.docx`;
+        
+        // ========================================================================
+        // ========= FIN DE LA CORRECTION APPLIQUÉE =========
+        // ========================================================================
         
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -237,3 +245,4 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 });
 
 module.exports = app;
+

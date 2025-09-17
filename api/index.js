@@ -212,7 +212,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         
         // ===== MODIFICATION : NOM DE FICHIER =====
         // Correction pour correspondre au format demandé et éviter les erreurs de caractères.
-        const filename = `Plan de lecon-${sanitizeForFilename(seance)}-${sanitizeForFilename(classe)}-Semaine${weekNumber}.docx`;
+        const filename = `Plan de lecon-${sanitizeForFilename(matiere)}-${sanitizeForFilename(seance)}-${sanitizeForFilename(classe)}-Semaine${weekNumber}.docx`;
         // ===== FIN DE LA MODIFICATION =====
         
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -229,3 +229,4 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 });
 
 module.exports = app;
+

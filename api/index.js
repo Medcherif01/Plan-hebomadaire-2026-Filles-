@@ -23,7 +23,7 @@ let geminiModel;
 if (!MONGO_URL) console.error('FATAL: MONGO_URL n\'est pas définie.');
 if (process.env.GEMINI_API_KEY) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    geminiModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+geminiModel = genAI.getGenerativeModel({ model: "gemini-1.0-pro" });
     console.log('✅ SDK Google Gemini initialisé.');
 } else {
     console.warn('⚠️ GEMINI_API_KEY non défini. La fonctionnalité IA sera désactivée.');
@@ -228,6 +228,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 });
 
 module.exports = app;
+
 
 
 

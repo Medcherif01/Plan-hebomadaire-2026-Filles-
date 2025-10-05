@@ -68,11 +68,12 @@ app.post('/api/full-report-by-class', async (req, res) => { try { const { classe
 app.post('/api/generate-ai-lesson-plan', async (req, res) => {
     try {
         const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-        const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+const apiToken = process.env.CLOUDFLARE_API_TOKEN;
 
-        if (!accountId || !apiToken) {
-            return res.status(503).json({ message: "Le service IA n'est pas configuré. Vérifiez les variables d'environnement Cloudflare." });
-        }
+if (!accountId || !apiToken) {
+    // Si l'une de ces clés est manquante, le code s'arrête ici
+    return res.status(503).json({ message: "Le service IA n'est pas configuré..." });
+}
 
         const { week, rowData } = req.body;
         if (!rowData || typeof rowData !== 'object' || !week) {
@@ -189,3 +190,4 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 
 // Exporter l'app pour Vercel
 module.exports = app;
+

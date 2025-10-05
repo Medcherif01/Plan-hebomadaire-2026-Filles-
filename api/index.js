@@ -133,7 +133,10 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
             {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
+                body: JSON.stringify({
+                    messages: [{ role: 'user', content: prompt }],
+                    max_tokens: 2048 // <<<=== LA CORRECTION EST ICI
+                })
             }
         );
 
@@ -192,3 +195,4 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 
 // Exporter l'app pour Vercel
 module.exports = app;
+

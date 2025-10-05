@@ -5,8 +5,7 @@ const fileUpload = require('express-fileupload');
 const XLSX = require('xlsx');
 const PizZip = require('pizzip');
 const Docxtemplater = require('docxtemplater');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const fetch = require('node-fetch');
+const fetch = require('node-fetch'); // Utilisé pour l'API Cloudflare
 const { MongoClient } = require('mongodb');
 
 const app = express();
@@ -18,23 +17,20 @@ app.use(fileUpload());
 
 const MONGO_URL = process.env.MONGO_URL;
 const WORD_TEMPLATE_URL = process.env.WORD_TEMPLATE_URL;
-let geminiModel;
 
-if (!MONGO_URL) console.error('FATAL: MONGO_URL n\'est pas définie.');
-if (process.env.GEMINI_API_KEY) {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    // Utilisation d'un modèle moderne qui sera reconnu par la bibliothèque mise à jour
-    geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" }); 
-    console.log('✅ SDK Google Gemini initialisé avec le modèle gemini-1.5-pro-latest.');
-} else {
-    console.warn('⚠️ GEMINI_API_KEY non défini. La fonctionnalité IA sera désactivée.');
+// On vérifie simplement que la variable MONGO_URL est définie
+if (!MONGO_URL) {
+    console.error('FATAL: MONGO_URL n\'est pas définie.');
 }
+
+// L'initialisation de l'IA se fait directement dans la fonction d'appel
+console.log('✅ Service prêt. La fonctionnalité IA utilisera Cloudflare si configurée.');
+
 
 const specificWeekDateRangesNode = {
   1:{start:'2025-08-31',end:'2025-09-04'}, 2:{start:'2025-09-07',end:'2025-09-11'}, 3:{start:'2025-09-14',end:'2025-09-18'}, 4:{start:'2025-09-21',end:'2025-09-25'}, 5:{start:'2025-09-28',end:'2025-10-02'}, 6:{start:'2025-10-05',end:'2025-10-09'}, 7:{start:'2025-10-12',end:'2025-10-16'}, 8:{start:'2025-10-19',end:'2025-10-23'}, 9:{start:'2025-10-26',end:'2025-10-30'},10:{start:'2025-11-02',end:'2025-11-06'}, 11:{start:'2025-11-09',end:'2025-11-13'},12:{start:'2025-11-16',end:'2025-11-20'}, 13:{start:'2025-11-23',end:'2025-11-27'},14:{start:'2025-11-30',end:'2025-12-04'}, 15:{start:'2025-12-07',end:'2025-12-11'},16:{start:'2025-12-14',end:'2025-12-18'}, 17:{start:'2025-12-21',end:'2025-12-25'},18:{start:'2025-12-28',end:'2026-01-01'}, 19:{start:'2026-01-04',end:'2026-01-08'},20:{start:'2026-01-11',end:'2026-01-15'}, 21:{start:'2026-01-18',end:'2026-01-22'},22:{start:'2026-01-25',end:'2026-01-29'}, 23:{start:'2026-02-01',end:'2026-02-05'},24:{start:'2026-02-08',end:'2026-02-12'}, 25:{start:'2026-02-15',end:'2026-02-19'},26:{start:'2026-02-22',end:'2026-02-26'}, 27:{start:'2026-03-01',end:'2026-03-05'},28:{start:'2026-03-08',end:'2026-03-12'}, 29:{start:'2026-03-15',end:'2026-03-19'},30:{start:'2026-03-22',end:'2026-03-26'}, 31:{start:'2026-03-29',end:'2026-04-02'},32:{start:'2026-04-05',end:'2026-04-09'}, 33:{start:'2026-04-12',end:'2026-04-16'},34:{start:'2026-04-19',end:'2026-04-23'}, 35:{start:'2026-04-26',end:'2026-04-30'},36:{start:'2026-05-03',end:'2026-05-07'}, 37:{start:'2026-05-10',end:'2026-05-14'},38:{start:'2026-05-17',end:'2026-05-21'}, 39:{start:'2026-05-24',end:'2026-05-28'},40:{start:'2026-05-31',end:'2026-06-04'}, 41:{start:'2026-06-07',end:'2026-06-11'},42:{start:'2026-06-14',end:'2026-06-18'}, 43:{start:'2026-06-21',end:'2026-06-25'},44:{start:'2026-06-28',end:'2026-07-02'}, 45:{start:'2026-07-05',end:'2026-07-09'},46:{start:'2026-07-12',end:'2026-07-16'}, 47:{start:'2026-07-19',end:'2026-07-23'},48:{start:'2026-07-26',end:'2026-07-30'}
 };
 
-// ===== MODIFICATION : Liste des enseignantes =====
 const validUsers = {
     "Mohamed": "Mohamed", "Zohra": "Zohra", "Jana": "Jana", "Aichetou": "Aichetou",
     "Amal": "Amal", "Amal Najar": "Amal Najar", "Ange": "Ange", "Anouar": "Anouar",
@@ -67,21 +63,28 @@ app.post('/api/generate-word', async (req, res) => { try { const { week, classe,
 app.post('/api/generate-excel-workbook', async (req, res) => { try { const weekNumber = Number(req.body.week); if (!Number.isInteger(weekNumber)) return res.status(400).json({ message: 'Semaine invalide.' }); const db = await connectToDatabase(); const planDocument = await db.collection('plans').findOne({ week: weekNumber }); if (!planDocument?.data?.length) return res.status(404).json({ message: `Aucune donnée pour S${weekNumber}.` }); const finalHeaders = [ 'Enseignant', 'Jour', 'Période', 'Classe', 'Matière', 'Leçon', 'Travaux de classe', 'Support', 'Devoirs' ]; const formattedData = planDocument.data.map(item => { const row = {}; finalHeaders.forEach(header => { const itemKey = findKey(item, header); row[header] = itemKey ? item[itemKey] : ''; }); return row; }); const workbook = XLSX.utils.book_new(); const worksheet = XLSX.utils.json_to_sheet(formattedData, { header: finalHeaders }); worksheet['!cols'] = [ { wch: 20 }, { wch: 15 }, { wch: 10 }, { wch: 12 }, { wch: 20 }, { wch: 45 }, { wch: 45 }, { wch: 25 }, { wch: 45 } ]; XLSX.utils.book_append_sheet(workbook, worksheet, `Plan S${weekNumber}`); const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }); const filename = `Plan_Hebdomadaire_S${weekNumber}_Complet.xlsx`; res.setHeader('Content-Disposition', `attachment; filename="${filename}"`); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.send(buffer); } catch (error) { console.error('❌ Erreur serveur /generate-excel-workbook:', error); if (!res.headersSent) res.status(500).json({ message: 'Erreur interne Excel.' }); } });
 app.post('/api/full-report-by-class', async (req, res) => { try { const { classe: requestedClass } = req.body; if (!requestedClass) return res.status(400).json({ message: 'Classe requise.' }); const db = await connectToDatabase(); const allPlans = await db.collection('plans').find({}).sort({ week: 1 }).toArray(); if (!allPlans || allPlans.length === 0) return res.status(404).json({ message: 'Aucune donnée.' }); const dataBySubject = {}; const monthsFrench = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]; allPlans.forEach(plan => { const weekNumber = plan.week; let monthName = 'N/A'; const weekDates = specificWeekDateRangesNode[weekNumber]; if (weekDates?.start) { try { const startDate = new Date(weekDates.start + 'T00:00:00Z'); monthName = monthsFrench[startDate.getUTCMonth()]; } catch (e) {} } (plan.data || []).forEach(item => { const itemClassKey = findKey(item, 'classe'); const itemSubjectKey = findKey(item, 'matière'); if (itemClassKey && item[itemClassKey] === requestedClass && itemSubjectKey && item[itemSubjectKey]) { const subject = item[itemSubjectKey]; if (!dataBySubject[subject]) dataBySubject[subject] = []; const row = { 'Mois': monthName, 'Semaine': weekNumber, 'Période': item[findKey(item, 'période')] || '', 'Leçon': item[findKey(item, 'leçon')] || '', 'Travaux de classe': item[findKey(item, 'travaux de classe')] || '', 'Support': item[findKey(item, 'support')] || '', 'Devoirs': item[findKey(item, 'devoirs')] || '' }; dataBySubject[subject].push(row); } }); }); const subjectsFound = Object.keys(dataBySubject); if (subjectsFound.length === 0) return res.status(404).json({ message: `Aucune donnée pour la classe '${requestedClass}'.` }); const workbook = XLSX.utils.book_new(); const headers = ['Mois', 'Semaine', 'Période', 'Leçon', 'Travaux de classe', 'Support', 'Devoirs']; subjectsFound.sort().forEach(subject => { const safeSheetName = subject.substring(0, 30).replace(/[*?:/\\\[\]]/g, '_'); const worksheet = XLSX.utils.json_to_sheet(dataBySubject[subject], { header: headers }); worksheet['!cols'] = [ { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 40 }, { wch: 40 }, { wch: 25 }, { wch: 40 } ]; XLSX.utils.book_append_sheet(workbook, worksheet, safeSheetName); }); const buffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'buffer' }); const filename = `Rapport_Complet_${requestedClass.replace(/[^a-z0-9]/gi, '_')}.xlsx`; res.setHeader('Content-Disposition', `attachment; filename="${filename}"`); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'); res.send(buffer); } catch (error) { console.error('❌ Erreur serveur /full-report-by-class:', error); if (!res.headersSent) res.status(500).json({ message: 'Erreur interne du rapport.' }); } });
 
+
+// ===== NOUVELLE FONCTION IA AVEC CLOUDFLARE =====
 app.post('/api/generate-ai-lesson-plan', async (req, res) => {
     try {
-        if (!geminiModel) {
-            return res.status(503).json({ message: "Le service IA n'est pas initialisé. Vérifiez la clé API du serveur." });
+        const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+        const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+
+        if (!accountId || !apiToken) {
+            return res.status(503).json({ message: "Le service IA n'est pas configuré. Vérifiez les variables d'environnement Cloudflare." });
         }
+
         const { week, rowData } = req.body;
         if (!rowData || typeof rowData !== 'object' || !week) {
             return res.status(400).json({ message: "Les données de la ligne ou de la semaine sont manquantes." });
         }
-        const enseignant = rowData[findKey(rowData, 'Enseignant')] || 'N/A';
+
         const classe = rowData[findKey(rowData, 'Classe')] || 'N/A';
         const matiere = rowData[findKey(rowData, 'Matière')] || 'N/A';
         const lecon = rowData[findKey(rowData, 'Leçon')] || 'Non spécifié';
         const travaux = rowData[findKey(rowData, 'Travaux de classe')] || 'Non spécifié';
         const support = rowData[findKey(rowData, 'Support')] || 'Non spécifié';
+
         const prompt = `
         En tant qu'assistant pédagogique expert, génère un plan de leçon détaillé pour un enseignant.
         Le contexte est le suivant:
@@ -90,6 +93,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         - Thème de la leçon: ${lecon}
         - Activité déjà prévue: ${travaux}
         - Support pédagogique mentionné: ${support}
+
         Le plan de leçon doit être structuré en français et de manière très claire, avec les sections suivantes. Chaque section doit commencer par son titre exact suivi de "::".
         Titre de la Leçon:: [Propose un titre clair et engageant pour la leçon]
         Objectifs d'Apprentissage:: [Liste à puces (-) des compétences précises que les élèves devront maîtriser à la fin de la séance. Utilise des verbes d'action.]
@@ -97,11 +101,38 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         Déroulement de la Séance (Étapes):: [Décris en détail le déroulement, étape par étape, avec une durée estimée pour chaque phase (ex: Introduction (5 min), Activité principale (25 min), Synthèse (10 min)). Sois très concret.]
         Méthode d'Évaluation:: [Propose une méthode simple et efficace pour évaluer si les objectifs ont été atteints (ex: questions orales, exercice rapide, observation).]
         Différenciation Pédagogique:: [Donne une suggestion pour les élèves en difficulté et une suggestion pour les élèves plus avancés.]
+
         Formatte ta réponse exclusivement en texte brut. N'utilise pas de Markdown (pas de \`*\`, \`#\`, etc.). Utilise des tirets (-) pour les listes à puces.
         `;
-        const result = await geminiModel.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
+
+        // Appel à l'API Cloudflare AI
+        const model = '@cf/meta/llama-3-8b-instruct'; // Utilisation de Llama 3, un excellent modèle
+        const response = await fetch(
+            `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    messages: [
+                        { role: 'system', content: 'Tu es un assistant pédagogique expert.' },
+                        { role: 'user', content: prompt }
+                    ]
+                })
+            }
+        );
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Erreur API Cloudflare: ${response.status} ${errorText}`);
+        }
+
+        const result = await response.json();
+        const text = result.result.response;
+
+        // Le reste du code pour générer le fichier Excel est IDENTIQUE
         const plan = {};
         const lines = text.split('\n').filter(line => line.trim() !== '');
         let currentSection = null;
@@ -115,6 +146,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
                 plan[currentSection].push(line.trim());
             }
         });
+
         const workbook = XLSX.utils.book_new();
         const wsData = [
             ["Plan de Leçon Généré par IA"], [], ["Contexte de la Leçon"],
@@ -122,7 +154,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
             ["Travaux prévus", travaux], []
         ];
         const sectionOrder = [
-            "Titre de la Leçon", "Objectifs d'Apprentissage", "Matériel Requis", 
+            "Titre de la Leçon", "Objectifs d'Apprentissage", "Matériel Requis",
             "Déroulement de la Séance (Étapes)", "Méthode d'Évaluation", "Différenciation Pédagogique"
         ];
         sectionOrder.forEach(sectionTitle => {
@@ -144,6 +176,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.send(buffer);
+
     } catch (error) {
         console.error('❌ Erreur serveur /generate-ai-lesson-plan:', error);
         if (!res.headersSent) {
@@ -151,8 +184,8 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
         }
     }
 });
+// ===== FIN DE LA SECTION IA =====
+
 
 // Exporter l'app pour Vercel
 module.exports = app;
-
-

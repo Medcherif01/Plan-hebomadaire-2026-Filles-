@@ -23,9 +23,9 @@ let geminiModel;
 if (!MONGO_URL) console.error('FATAL: MONGO_URL n\'est pas définie.');
 if (process.env.GEMINI_API_KEY) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    // ===== CORRECTION : Utilisation d'un modèle compatible pour éviter l'erreur 404 =====
-    geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
-    console.log('✅ SDK Google Gemini initialisé avec le modèle gemini-pro.');
+    // Utilisation d'un modèle moderne qui sera reconnu par la bibliothèque mise à jour
+    geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" }); 
+    console.log('✅ SDK Google Gemini initialisé avec le modèle gemini-1.5-pro-latest.');
 } else {
     console.warn('⚠️ GEMINI_API_KEY non défini. La fonctionnalité IA sera désactivée.');
 }
@@ -154,4 +154,5 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 
 // Exporter l'app pour Vercel
 module.exports = app;
+
 

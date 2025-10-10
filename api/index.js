@@ -1,4 +1,4 @@
-// api/index.js — Version REST (fetch) corrigée et stabilisée (v1 + responseMimeType)
+// api/index.js — Version REST (fetch) corrigée et stabilisée (v1, sans generationConfig)
 
 const express = require('express');
 const cors = require('cors');
@@ -449,7 +449,7 @@ app.post('/api/full-report-by-class', async (req, res) => {
   }
 });
 
-// --------------------- Génération IA (REST, v1) ------------------------
+// --------------------- Génération IA (REST, v1, sans generationConfig) -
 
 app.post('/api/generate-ai-lesson-plan', async (req, res) => {
   try {
@@ -481,7 +481,8 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 
     // Extraire données
     const enseignant = rowData[findKey(rowData, 'Enseignant')] || '';
-    const classe = rowData[findKey(rowData, 'Classe')] || '';
+    theClasse = rowData[findKey(rowData, 'Classe')] || ''; // (nom variable distinct de 'class' réservé)
+    const classe = theClasse;
     const matiere = rowData[findKey(rowData, 'Matière')] || '';
     const lecon = rowData[findKey(rowData, 'Leçon')] || '';
     const jour = rowData[findKey(rowData, 'Jour')] || '';
@@ -507,37 +508,49 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 
     let prompt;
     if (englishTeachers.includes(enseignant)) {
-      prompt = `As an expert pedagogical assistant, create a detailed 45-minute lesson plan in English. Structure the lesson into timed phases. Intelligently integrate the teacher's existing notes:
+      prompt = `Return ONLY valid JSON. No markdown, no code fences, no commentary.
+
+As an expert pedagogical assistant, create a detailed 45-minute lesson plan in English. Structure the lesson into timed phases. Intelligently integrate the teacher's existing notes:
 - Subject: ${matiere}, Class: ${classe}, Lesson Topic: ${lecon}
 - Planned Classwork: ${travaux}
 - Mentioned Support/Materials: ${support}
 - Planned Homework: ${devoirsPrevus}
-Generate a response in valid JSON format only. Use the following JSON structure with professional and concrete values in English: ${jsonStructure}`;
+
+Use the following JSON structure with professional, concrete values in English (keys exactly as specified):
+${jsonStructure}`;
     } else if (arabicTeachers.includes(enseignant)) {
-      prompt = `بصفتك مساعدًا تربويًا خبيرًا، قم بإنشاء خطة درس مفصلة باللغة العربية مدتها 45 دقيقة. قم ببناء الدرس في مراحل محددة بوقت. ادمج بذكاء ملاحظات المعلم الحالية:
-- المادة: ${matiere}, الفصل: ${classe}, موضوع الدرس: ${lecon}
-- عمل الفصل المخطط له: ${travaux}
-- الدعم / المواد المذكورة: ${support}
+      prompt = `أعد فقط JSON صالحًا. بدون Markdown أو أسوار كود أو تعليقات.
+
+بصفتك مساعدًا تربويًا خبيرًا، قم بإنشاء خطة درس مفصلة باللغة العربية مدتها 45 دقيقة. قم ببناء الدرس في مراحل محددة بوقت. ادمج بذكاء ملاحظات المعلم الحالية:
+- المادة: ${matiere}، الفصل: ${classe}، موضوع الدرس: ${lecon}
+- أعمال الفصل المخطط لها: ${travaux}
+- الدعم/المواد المذكورة: ${support}
 - الواجبات المخطط لها: ${devoirsPrevus}
-قم بإنشاء استجابة بتنسيق JSON صالح فقط. يجب استعمال البنية التالية بقيم مهنية وملموسة (المفاتيح بالإنجليزية): ${jsonStructure}`;
+
+استخدم البنية التالية مع قيم مهنية وملموسة (المفاتيح كما هي بالإنجليزية):
+${jsonStructure}`;
     } else {
-      prompt = `En tant qu'assistant pédagogique expert, crée un plan de leçon détaillé de 45 minutes en français. Structure la leçon en phases chronométrées. Intègre intelligemment les notes existantes de l'enseignant :
-- Matière: ${matiere}, Classe: ${classe}, Thème de la leçon: ${lecon}
+      prompt = `Renvoie UNIQUEMENT du JSON valide. Pas de markdown, pas de blocs de code, pas de commentaire.
+
+En tant qu'assistant pédagogique expert, crée un plan de leçon détaillé de 45 minutes en français. Structure la leçon en phases chronométrées. Intègre intelligemment les notes existantes de l'enseignant :
+- Matière : ${matiere}, Classe : ${classe}, Thème : ${lecon}
 - Travaux de classe prévus : ${travaux}
 - Support/Matériel mentionné : ${support}
 - Devoirs prévus : ${devoirsPrevus}
-Génère une réponse au format JSON valide uniquement selon la structure suivante (valeurs concrètes et professionnelles en français) : ${jsonStructure}`;
+
+Utilise la structure JSON suivante (valeurs concrètes et professionnelles en français ; clés exactement identiques) :
+${jsonStructure}`;
     }
 
-    // === v1 endpoint + camelCase responseMimeType ===
+    // === v1 endpoint (sans generationConfig) ===
     const MODEL_NAME = "gemini-1.5-flash-latest"; // ou "gemini-1.5-flash-001"
     const API_URL = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
 
     const requestBody = {
-      contents: [{ role: "user", parts: [{ text: prompt }]}],
-      generationConfig: {
-        responseMimeType: "application/json"
-      }
+      contents: [
+        { role: "user", parts: [{ text: prompt }] }
+      ]
+      // Pas de generationConfig ici pour éviter l'erreur 400
     };
 
     const aiResponse = await fetch(API_URL, {
@@ -571,12 +584,12 @@ Génère une réponse au format JSON valide uniquement selon la structure suivan
       return res.status(500).json({ message: "Réponse IA vide ou non reconnue." });
     }
 
-    // Parse JSON avec petit nettoyage si Markdown
+    // Parse JSON avec petit nettoyage si Markdown accidentel
     let aiData;
     try {
       aiData = JSON.parse(text);
-    } catch (e) {
-      const cleaned = text.replace(/^```json\s*|\s*```$/g, '');
+    } catch {
+      const cleaned = text.replace(/^```json\s*|\s*```$/g, '').trim();
       aiData = JSON.parse(cleaned);
     }
 

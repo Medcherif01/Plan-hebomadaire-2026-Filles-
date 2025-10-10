@@ -1,6 +1,4 @@
-// ============================================
-// PLAN-HEBDOMADAIRE SERVEUR AVEC IA (GEMINI 2.5)
-// ============================================
+// api/index.js — Version REST (fetch) corrigée
 
 const express = require('express');
 const cors = require('cors');
@@ -10,26 +8,61 @@ const PizZip = require('pizzip');
 const Docxtemplater = require('docxtemplater');
 const fetch = require('node-fetch');
 const { MongoClient } = require('mongodb');
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+// ========================================================================
+// ========= FONCTION D'AIDE POUR LA GÉNÉRATION WORD (VERSION FINALE) =====
+// ========================================================================
+
+const xmlEscape = (str) => {
+  if (typeof str !== 'string') return '';
+  return str.replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+};
+
+const containsArabic = (text) => {
+  if (typeof text !== 'string') return false;
+  const arabicRegex = /[\u0600-\u06FF]/;
+  return arabicRegex.test(text);
+};
+
+const formatTextForWord = (text, options = {}) => {
+  if (!text || typeof text !== 'string' || text.trim() === '') {
+    return '<w:p/>';
+  }
+  const { color, italic } = options;
+  const runPropertiesParts = [];
+  runPropertiesParts.push('<w:sz w:val="22"/><w:szCs w:val="22"/>');
+  if (color) runPropertiesParts.push(`<w:color w:val="${color}"/>`);
+  if (italic) runPropertiesParts.push('<w:i/><w:iCs w:val="true"/>');
+
+  let paragraphProperties = '';
+  if (containsArabic(text)) {
+    paragraphProperties = '<w:pPr><w:jc w:val="right"/><w:bidi/></w:pPr>';
+    runPropertiesParts.push('<w:rtl/>');
+  }
+
+  const runProperties = `<w:rPr>${runPropertiesParts.join('')}</w:rPr>`;
+  const lines = text.split(/\r\n|\n|\r/);
+  const content = lines
+    .map(line => `<w:t xml:space="preserve">${xmlEscape(line)}</w:t>`)
+    .join('<w:br/>');
+  return `<w:p>${paragraphProperties}<w:r>${runProperties}${content}</w:r></w:p>`;
+};
 
 const app = express();
-
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(fileUpload());
 
-// =========================
-// VARIABLES D’ENVIRONNEMENT (non bloquantes au top-level)
-// =========================
 const MONGO_URL = process.env.MONGO_URL;
 const WORD_TEMPLATE_URL = process.env.WORD_TEMPLATE_URL;
 const LESSON_TEMPLATE_URL = process.env.LESSON_TEMPLATE_URL;
 
-if (!MONGO_URL) console.error('❌ FATAL: MONGO_URL non définie.');
-console.log('✅ Serveur initialisé.');
+const arabicTeachers = ['Amal Najar', 'Emen', 'Fatima', 'Ghadah', 'Hana'];
+const englishTeachers = ['Jana','Amal','Farah','Tayba','Shanoja'];
 
-// =========================
 const specificWeekDateRangesNode = {
   1:{start:'2025-08-31',end:'2025-09-04'}, 2:{start:'2025-09-07',end:'2025-09-11'}, 3:{start:'2025-09-14',end:'2025-09-18'}, 4:{start:'2025-09-21',end:'2025-09-25'}, 5:{start:'2025-09-28',end:'2025-10-02'}, 6:{start:'2025-10-05',end:'2025-10-09'}, 7:{start:'2025-10-12',end:'2025-10-16'}, 8:{start:'2025-10-19',end:'2025-10-23'}, 9:{start:'2025-10-26',end:'2025-10-30'},10:{start:'2025-11-02',end:'2025-11-06'},
   11:{start:'2025-11-09',end:'2025-11-13'},12:{start:'2025-11-16',end:'2025-11-20'}, 13:{start:'2025-11-23',end:'2025-11-27'},14:{start:'2025-11-30',end:'2025-12-04'}, 15:{start:'2025-12-07',end:'2025-12-11'},16:{start:'2025-12-14',end:'2025-12-18'}, 17:{start:'2025-12-21',end:'2025-12-25'},18:{start:'2025-12-28',end:'2026-01-01'}, 19:{start:'2026-01-04',end:'2026-01-08'},20:{start:'2026-01-11',end:'2026-01-15'},
@@ -39,16 +72,13 @@ const specificWeekDateRangesNode = {
 };
 
 const validUsers = {
-  "Mohamed": "Mohamed", "Zohra": "Zohra", "Jana": "Jana", "Aichetou": "Aichetou",
+ "Mohamed": "Mohamed", "Zohra": "Zohra", "Jana": "Jana", "Aichetou": "Aichetou",
   "Amal": "Amal", "Amal Najar": "Amal Najar", "Ange": "Ange", "Anouar": "Anouar",
   "Emen": "Emen", "Farah": "Farah", "Fatima": "Fatima", "Ghadah": "Ghadah",
-  "Hana": "Hana", "Nada": "Nada", "Tayba": "Tayba", "Shanoja": "Shanoja",
+  "Hana": "Hana", "Samira": "Samira", "Tayba": "Tayba", "Shanoja": "Shanoja",
   "Sara": "Sara", "Souha": "Souha", "Inas": "Inas"
 };
 
-// =========================
-// MONGO
-// =========================
 let cachedDb = null;
 async function connectToDatabase() {
   if (cachedDb) return cachedDb;
@@ -59,13 +89,10 @@ async function connectToDatabase() {
   return db;
 }
 
-// =========================
-// OUTILS TEXTE & DATES
-// =========================
 function formatDateFrenchNode(date) {
   if (!date || isNaN(date.getTime())) return "Date invalide";
-  const days = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
-  const months = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+  const days = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+  const months = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
   const dayName = days[date.getUTCDay()];
   const dayNum = String(date.getUTCDate()).padStart(2, '0');
   const monthName = months[date.getUTCMonth()];
@@ -77,21 +104,29 @@ function getDateForDayNameNode(weekStartDate, dayName) {
   const dayOrder = { "Dimanche": 0, "Lundi": 1, "Mardi": 2, "Mercredi": 3, "Jeudi": 4 };
   const offset = dayOrder[dayName];
   if (offset === undefined) return null;
-  const specificDate = new Date(Date.UTC(weekStartDate.getUTCFullYear(), weekStartDate.getUTCMonth(), weekStartDate.getUTCDate()));
+  const specificDate = new Date(Date.UTC(
+    weekStartDate.getUTCFullYear(),
+    weekStartDate.getUTCMonth(),
+    weekStartDate.getUTCDate()
+  ));
   specificDate.setUTCDate(specificDate.getUTCDate() + offset);
   return specificDate;
 }
 const findKey = (obj, target) => obj ? Object.keys(obj).find(k => k.trim().toLowerCase() === target.toLowerCase()) : undefined;
 
-// =========================
-// ROUTES AUTH + CRUD
-// =========================
+// ------------------------- Auth & CRUD simples -------------------------
+
 app.post('/api/login', (req, res) => {
-  const { username, password } = req.body;
-  if (validUsers[username] && validUsers[username] === password) {
-    res.status(200).json({ success: true, username: username });
-  } else {
-    res.status(401).json({ success: false, message: 'Identifiants invalides' });
+  try {
+    const { username, password } = req.body;
+    if (validUsers[username] && validUsers[username] === password) {
+      res.status(200).json({ success: true, username: username });
+    } else {
+      res.status(401).json({ success: false, message: 'Identifiants invalides' });
+    }
+  } catch (error) {
+    console.error('CRASH in /api/login:', error);
+    res.status(500).json({ success: false, message: 'Erreur interne du serveur.' });
   }
 });
 
@@ -118,7 +153,11 @@ app.post('/api/save-plan', async (req, res) => {
   if (isNaN(weekNumber) || !Array.isArray(data)) return res.status(400).json({ message: 'Données invalides.' });
   try {
     const db = await connectToDatabase();
-    await db.collection('plans').updateOne({ week: weekNumber }, { $set: { data: data } }, { upsert: true });
+    await db.collection('plans').updateOne(
+      { week: weekNumber },
+      { $set: { data: data } },
+      { upsert: true }
+    );
     res.status(200).json({ message: `Plan S${weekNumber} enregistré.` });
   } catch (error) {
     console.error('Erreur MongoDB /save-plan:', error);
@@ -132,7 +171,11 @@ app.post('/api/save-notes', async (req, res) => {
   if (isNaN(weekNumber) || !classe) return res.status(400).json({ message: 'Données invalides.' });
   try {
     const db = await connectToDatabase();
-    await db.collection('plans').updateOne({ week: weekNumber }, { $set: { [`classNotes.${classe}`]: notes } }, { upsert: true });
+    await db.collection('plans').updateOne(
+      { week: weekNumber },
+      { $set: { [`classNotes.${classe}`]: notes } },
+      { upsert: true }
+    );
     res.status(200).json({ message: 'Notes enregistrées.' });
   } catch (error) {
     console.error('Erreur MongoDB /save-notes:', error);
@@ -148,7 +191,9 @@ app.post('/api/save-row', async (req, res) => {
     const db = await connectToDatabase();
     const updateFields = {};
     const now = new Date();
-    for (const key in rowData) updateFields[`data.$[elem].${key}`] = rowData[key];
+    for (const key in rowData) {
+      updateFields[`data.$[elem].${key}`] = rowData[key];
+    }
     updateFields['data.$[elem].updatedAt'] = now;
 
     const arrayFilters = [{
@@ -160,7 +205,9 @@ app.post('/api/save-row', async (req, res) => {
     }];
 
     const result = await db.collection('plans').updateOne(
-      { week: weekNumber }, { $set: updateFields }, { arrayFilters: arrayFilters }
+      { week: weekNumber },
+      { $set: updateFields },
+      { arrayFilters: arrayFilters }
     );
 
     if (result.modifiedCount > 0 || result.matchedCount > 0) {
@@ -185,9 +232,8 @@ app.get('/api/all-classes', async (req, res) => {
   }
 });
 
-// =========================
-// GÉNÉRATION WORD (plan hebdo)
-// =========================
+// --------------------- Génération Word (plan hebdo) ---------------------
+
 app.post('/api/generate-word', async (req, res) => {
   try {
     const { week, classe, data, notes } = req.body;
@@ -196,32 +242,40 @@ app.post('/api/generate-word', async (req, res) => {
       return res.status(400).json({ message: 'Données invalides.' });
     }
 
-    // Charger le template
     let templateBuffer;
     try {
       const response = await fetch(WORD_TEMPLATE_URL);
       if (!response.ok) throw new Error(`Échec modèle Word (${response.status})`);
       templateBuffer = Buffer.from(await response.arrayBuffer());
     } catch (e) {
+      console.error("Erreur de récupération du modèle Word:", e);
       return res.status(500).json({ message: `Erreur récup modèle Word.` });
     }
 
     const zip = new PizZip(templateBuffer);
-    const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, nullGetter: () => "" });
+    const doc = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      nullGetter: () => "",
+    });
 
     const groupedByDay = {};
     const dayOrder = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi"];
     const datesNode = specificWeekDateRangesNode[weekNumber];
     let weekStartDateNode = null;
-    if (datesNode?.start) weekStartDateNode = new Date(datesNode.start + 'T00:00:00Z');
+    if (datesNode?.start) {
+      weekStartDateNode = new Date(datesNode.start + 'T00:00:00Z');
+    }
     if (!weekStartDateNode || isNaN(weekStartDateNode.getTime())) {
       return res.status(500).json({ message: `Dates serveur manquantes pour S${weekNumber}.` });
     }
 
     const sampleRow = data[0] || {};
-    const jourKey = findKey(sampleRow, 'Jour'), periodeKey = findKey(sampleRow, 'Période'),
-          matiereKey = findKey(sampleRow, 'Matière'), leconKey = findKey(sampleRow, 'Leçon'),
-          travauxKey = findKey(sampleRow, 'Travaux de classe'), supportKey = findKey(sampleRow, 'Support'),
+    const jourKey = findKey(sampleRow, 'Jour'),
+          periodeKey = findKey(sampleRow, 'Période'),
+          matiereKey = findKey(sampleRow, 'Matière'),
+          leconKey = findKey(sampleRow, 'Leçon'),
+          travauxKey = findKey(sampleRow, 'Travaux de classe'),
+          supportKey = findKey(sampleRow, 'Support'),
           devoirsKey = findKey(sampleRow, 'Devoirs');
 
     data.forEach(item => {
@@ -234,16 +288,19 @@ app.post('/api/generate-word', async (req, res) => {
 
     const joursData = dayOrder.map(dayName => {
       if (!groupedByDay[dayName]) return null;
+
       const dateOfDay = getDateForDayNameNode(weekStartDateNode, dayName);
       const formattedDate = dateOfDay ? formatDateFrenchNode(dateOfDay) : dayName;
       const sortedEntries = groupedByDay[dayName].sort((a, b) => (parseInt(a[periodeKey], 10) || 0) - (parseInt(b[periodeKey], 10) || 0));
+
       const matieres = sortedEntries.map(item => ({
         matiere: item[matiereKey] ?? "",
-        Lecon: item[leconKey] ?? "",
-        travailDeClasse: item[travauxKey] ?? "",
-        Support: item[supportKey] ?? "",
-        devoirs: item[devoirsKey] ?? ""
+        Lecon: formatTextForWord(item[leconKey], { color: 'FF0000' }),
+        travailDeClasse: formatTextForWord(item[travauxKey]),
+        Support: formatTextForWord(item[supportKey], { color: 'FF0000', italic: true }),
+        devoirs: formatTextForWord(item[devoirsKey], { color: '0000FF', italic: true })
       }));
+
       return { jourDateComplete: formattedDate, matieres: matieres };
     }).filter(Boolean);
 
@@ -260,7 +317,7 @@ app.post('/api/generate-word', async (req, res) => {
       semaine: weekNumber,
       classe: classe,
       jours: joursData,
-      notes: (notes || ""),
+      notes: formatTextForWord(notes),
       plageSemaine: plageSemaineText
     };
 
@@ -274,13 +331,14 @@ app.post('/api/generate-word', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Erreur serveur /generate-word:', error);
-    if (!res.headersSent) res.status(500).json({ message: 'Erreur interne /generate-word.' });
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Erreur interne /generate-word.' });
+    }
   }
 });
 
-// =========================
-// GÉNÉRATION EXCEL (workbook)
-// =========================
+// --------------------- Génération Excel (workbook) ---------------------
+
 app.post('/api/generate-excel-workbook', async (req, res) => {
   try {
     const weekNumber = Number(req.body.week);
@@ -319,7 +377,8 @@ app.post('/api/generate-excel-workbook', async (req, res) => {
   }
 });
 
-// =========================
+// --------------- Rapport Excel par classe (toutes semaines) ------------
+
 app.post('/api/full-report-by-class', async (req, res) => {
   try {
     const { classe: requestedClass } = req.body;
@@ -330,7 +389,7 @@ app.post('/api/full-report-by-class', async (req, res) => {
     if (!allPlans || allPlans.length === 0) return res.status(404).json({ message: 'Aucune donnée.' });
 
     const dataBySubject = {};
-    const monthsFrench = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
+    const monthsFrench = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
 
     allPlans.forEach(plan => {
       const weekNumber = plan.week;
@@ -389,18 +448,18 @@ app.post('/api/full-report-by-class', async (req, res) => {
   }
 });
 
-// =========================
-// IA : GÉNÉRATION DU PLAN DE LEÇON (Gemini SDK)
-// =========================
+// --------------------- Génération IA (REST, v1beta) --------------------
+
 app.post('/api/generate-ai-lesson-plan', async (req, res) => {
   try {
-    // LIRE LA CLE ICI (runtime) — important sur Vercel
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
     if (!GEMINI_API_KEY) {
-      return res.status(503).json({ message: "Le service IA n'est pas initialisé. GEMINI_API_KEY manquante." });
+      return res.status(503).json({ message: "Le service IA n'est pas initialisé. Vérifiez la clé API GEMINI du serveur." });
     }
-    if (!LESSON_TEMPLATE_URL) {
-      return res.status(503).json({ message: "LESSON_TEMPLATE_URL manquante." });
+
+    const lessonTemplateUrl = process.env.LESSON_TEMPLATE_URL;
+    if (!lessonTemplateUrl) {
+      return res.status(503).json({ message: "L'URL du modèle de leçon Word n'est pas configurée." });
     }
 
     const { week, rowData } = req.body;
@@ -411,7 +470,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
     // Charger le modèle Word
     let templateBuffer;
     try {
-      const response = await fetch(LESSON_TEMPLATE_URL);
+      const response = await fetch(lessonTemplateUrl);
       if (!response.ok) throw new Error(`Échec du téléchargement du modèle Word (${response.status})`);
       templateBuffer = Buffer.from(await response.arrayBuffer());
     } catch (e) {
@@ -425,56 +484,12 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
     const matiere = rowData[findKey(rowData, 'Matière')] || '';
     const lecon = rowData[findKey(rowData, 'Leçon')] || '';
     const jour = rowData[findKey(rowData, 'Jour')] || '';
-    const periode = rowData[findKey(rowData, 'Période')] || '';
+    const seance = rowData[findKey(rowData, 'Période')] || '';
+    const support = rowData[findKey(rowData, 'Support')] || 'Non spécifié';
+    const travaux = rowData[findKey(rowData, 'Travaux de classe')] || 'Non spécifié';
+    const devoirsPrevus = rowData[findKey(rowData, 'Devoirs')] || 'Non spécifié';
 
-    // Construire prompt
-    const prompt = `
-En tant qu'assistant pédagogique expert, crée un plan de leçon de 45 minutes.
-Matière: ${matiere}
-Classe: ${classe}
-Leçon: ${lecon}
-
-Réponds uniquement avec un JSON valide, sans texte avant/après.
-Structure demandée :
-{
-  "TitreUnite": "Nom de l'unité ou chapitre",
-  "Methodes": "Méthodes d’enseignement",
-  "Outils": "Outils de travail",
-  "Deroulement": [
-    {"Phase": "Introduction", "Duree": "5", "Activite": "Description"},
-    {"Phase": "Activité principale", "Duree": "30", "Activite": "Description"},
-    {"Phase": "Conclusion", "Duree": "10", "Activite": "Description"}
-  ],
-  "DiffLents": "Aide pour élèves en difficulté",
-  "DiffTresPerf": "Extension pour élèves avancés",
-  "DiffTous": "Approche pour toute la classe",
-  "Devoirs": "Devoir à la maison"
-}
-`;
-
-    // Appel Gemini
-    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }]}],
-      generationConfig: { responseMimeType: "application/json" }
-    });
-
-    const text = (await result.response.text()).trim();
-    let aiData;
-    try {
-      aiData = JSON.parse(text);
-    } catch (e) {
-      console.error("Réponse IA invalide (pas JSON):", text);
-      return res.status(500).json({ message: "L'IA a retourné une réponse mal formée (JSON attendu)." });
-    }
-
-    // Préparer le DOCX
-    const zip = new PizZip(templateBuffer);
-    const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, nullGetter: () => "" });
-
-    // Date formatée (si on veut la vraie date du jour de la semaine)
+    // Date formatée
     let formattedDate = "";
     const weekNumber = Number(week);
     const datesNode = specificWeekDateRangesNode[weekNumber];
@@ -486,34 +501,104 @@ Structure demandée :
       }
     }
 
-    // Strings pratiques
+    // Prompt + structure JSON
+    const jsonStructure = `{"TitreUnite":"un titre d'unité pertinent pour la leçon","Methodes":"liste des méthodes d'enseignement","Outils":"liste des outils de travail","Objectifs":"une liste concise des objectifs d'apprentissage (compétences, connaissances), séparés par des sauts de ligne (\\\\n). Commence chaque objectif par un tiret (-).","etapes":[{"phase":"Introduction","duree":"5 min","activite":"Description de l'activité d'introduction pour l'enseignant et les élèves."},{"phase":"Activité Principale","duree":"25 min","activite":"Description de l'activité principale, en intégrant les 'travaux de classe' et le 'support' si possible."},{"phase":"Synthèse","duree":"10 min","activite":"Description de l'activité de conclusion et de vérification des acquis."},{"phase":"Clôture","duree":"5 min","activite":"Résumé rapide et annonce des devoirs."}],"Ressources":"les ressources spécifiques à utiliser.","Devoirs":"une suggestion de devoirs.","DiffLents":"une suggestion pour aider les apprenants en difficulté.","DiffTresPerf":"une suggestion pour stimuler les apprenants très performants.","DiffTous":"une suggestion de différenciation pour toute la classe."}`;
+
+    let prompt;
+    if (englishTeachers.includes(enseignant)) {
+      prompt = `As an expert pedagogical assistant, create a detailed 45-minute lesson plan in English. Structure the lesson into timed phases. Intelligently integrate the teacher's existing notes:
+- Subject: ${matiere}, Class: ${classe}, Lesson Topic: ${lecon}
+- Planned Classwork: ${travaux}
+- Mentioned Support/Materials: ${support}
+- Planned Homework: ${devoirsPrevus}
+Generate a response in valid JSON format only. Use the following JSON structure with professional and concrete values in English: ${jsonStructure}`;
+    } else if (arabicTeachers.includes(enseignant)) {
+      prompt = `بصفتك مساعدًا تربويًا خبيرًا، قم بإنشاء خطة درس مفصلة باللغة العربية مدتها 45 دقيقة. قم ببناء الدرس في مراحل محددة بوقت. ادمج بذكاء ملاحظات المعلم الحالية:
+- المادة: ${matiere}, الفصل: ${classe}, موضوع الدرس: ${lecon}
+- عمل الفصل المخطط له: ${travaux}
+- الدعم / المواد المذكورة: ${support}
+- الواجبات المخطط لها: ${devoirsPrevus}
+قم بإنشاء استجابة بتنسيق JSON صالح فقط. يجب استعمال البنية التالية بقيم مهنية وملموسة (المفاتيح بالإنجليزية): ${jsonStructure}`;
+    } else {
+      prompt = `En tant qu'assistant pédagogique expert, crée un plan de leçon détaillé de 45 minutes en français. Structure la leçon en phases chronométrées. Intègre intelligemment les notes existantes de l'enseignant :
+- Matière: ${matiere}, Classe: ${classe}, Thème de la leçon: ${lecon}
+- Travaux de classe prévus : ${travaux}
+- Support/Matériel mentionné : ${support}
+- Devoirs prévus : ${devoirsPrevus}
+Génère une réponse au format JSON valide uniquement selon la structure suivante (valeurs concrètes et professionnelles en français) : ${jsonStructure}`;
+    }
+
+    // === CORRECTION : modèle & endpoint ===
+    const MODEL_NAME = "gemini-2.5-flash";
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
+
+    const requestBody = {
+      contents: [{ role: "user", parts: [{ text: prompt }]}],
+      generationConfig: {
+        responseMimeType: "application/json"
+      }
+    };
+
+    const aiResponse = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!aiResponse.ok) {
+      const errorBody = await aiResponse.json().catch(() => ({}));
+      console.error("Erreur de l'API Google AI:", JSON.stringify(errorBody, null, 2));
+      throw new Error(`[${aiResponse.status} ${aiResponse.statusText}] ${errorBody.error?.message || 'Erreur inconnue de l\'API.'}`);
+    }
+
+    const aiResult = await aiResponse.json();
+    const text = aiResult?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+    let aiData;
+    try {
+      aiData = JSON.parse(text);
+    } catch (e) {
+      console.error("Erreur de parsing JSON de la réponse de l'IA:", text);
+      return res.status(500).json({ message: "L'IA a retourné une réponse mal formée." });
+    }
+
+    // Préparer le DOCX
+    const zip = new PizZip(templateBuffer);
+    const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, nullGetter: () => "" });
+
     let minutageString = "";
     let contenuString = "";
-    if (Array.isArray(aiData.Deroulement)) {
-      minutageString = aiData.Deroulement.map(e => e.Duree || "").join('\n');
-      contenuString = aiData.Deroulement.map(e => `▶ ${e.Phase || ""}:\n${e.Activite || ""}`).join('\n\n');
+    if (aiData.etapes && Array.isArray(aiData.etapes)) {
+      minutageString = aiData.etapes.map(e => e.duree || "").join('\n');
+      contenuString = aiData.etapes.map(e => `▶ ${e.phase || ""}:\n${e.activite || ""}`).join('\n\n');
     }
 
     const templateData = {
       ...aiData,
       Semaine: week,
-      Classe: classe,
-      Matiere: matiere,
       Lecon: lecon,
+      Matiere: matiere,
+      Classe: classe,
       Jour: jour,
-      Periode: periode,
+      Seance: seance,
       NomEnseignant: enseignant,
-      Date: formattedDate || new Date().toLocaleDateString("fr-FR"),
-      DeroulementStr: minutageString,
-      ContenuStr: contenuString
+      Date: formattedDate,
+      Deroulement: minutageString,
+      Contenu: contenuString,
     };
 
     doc.render(templateData);
-
     const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
-    const sanitize = (s) => (String(s || '')).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9-]/g,'_');
-    const filename = `Plan_IA_S${weekNumber}_${sanitize(classe)}_${sanitize(matiere)}.docx`;
 
+    const sanitizeForFilename = (str) => {
+      if (typeof str !== 'string') str = String(str);
+      const normalized = str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return normalized
+        .replace(/\s+/g, '-')
+        .replace(/[^a-zA-Z0-9-]/g, '_')
+        .replace(/__+/g, '_');
+    };
+
+    const filename = `Plan de lecon-${sanitizeForFilename(matiere)}-${sanitizeForFilename(seance)}-${sanitizeForFilename(classe)}-Semaine${weekNumber}.docx`;
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     res.send(buf);
@@ -521,24 +606,10 @@ Structure demandée :
   } catch (error) {
     console.error('❌ Erreur serveur /generate-ai-lesson-plan:', error);
     if (!res.headersSent) {
-      res.status(500).json({ message: `Erreur interne lors de la génération IA: ${error.message}` });
+      const errorMessage = error.message || "Erreur interne.";
+      res.status(500).json({ message: `Erreur interne lors de la génération IA: ${errorMessage}` });
     }
   }
 });
 
-// =========================
-// DIAGNOSTIC RUNTIME
-// =========================
-app.get('/api/_diag', (req, res) => {
-  res.json({
-    runtime: "node",
-    GEMINI_API_KEY_present: !!process.env.GEMINI_API_KEY,
-    LESSON_TEMPLATE_URL_present: !!process.env.LESSON_TEMPLATE_URL,
-    WORD_TEMPLATE_URL_present: !!process.env.WORD_TEMPLATE_URL
-  });
-});
-
-// =========================
-// EXPORT POUR VERCEL
-// =========================
 module.exports = app;

@@ -1,4 +1,4 @@
-// api/index.js — Version REST (fetch) corrigée
+// api/index.js — Version REST (fetch) corrigée et stabilisée
 
 const express = require('express');
 const cors = require('cors');
@@ -10,7 +10,7 @@ const fetch = require('node-fetch');
 const { MongoClient } = require('mongodb');
 
 // ========================================================================
-// ========= FONCTION D'AIDE POUR LA GÉNÉRATION WORD (VERSION FINALE) =====
+// ====================== AIDES POUR GÉNÉRATION WORD ======================
 // ========================================================================
 
 const xmlEscape = (str) => {
@@ -38,9 +38,6 @@ const formatTextForWord = (text, options = {}) => {
 
   let paragraphProperties = '';
   if (containsArabic(text)) {
-    // CORRECTION #3: Inversion de l'ordre de bidi et jc pour une meilleure compatibilité.
-    // La balise <w:bidi/> indique au paragraphe d'adopter une direction de droite à gauche.
-    // La balise <w:jc w:val="right"/> assure que l'alignement visuel du texte est à droite.
     paragraphProperties = '<w:pPr><w:bidi/><w:jc w:val="right"/></w:pPr>';
     runPropertiesParts.push('<w:rtl/>');
   }
@@ -224,11 +221,12 @@ app.post('/api/save-row', async (req, res) => {
   }
 });
 
+// Correction MongoDB ($ne dupliqué → $nin)
 app.get('/api/all-classes', async (req, res) => {
   try {
     const db = await connectToDatabase();
-    const classes = await db.collection('plans').distinct('data.Classe', { 'data.Classe': { $ne: null, $ne: "" } });
-    res.status(200).json(classes.sort());
+    const classes = await db.collection('plans').distinct('data.Classe', { 'data.Classe': { $nin: [null, ""] } });
+    res.status(200).json((classes || []).sort());
   } catch (error) {
     console.error('Erreur MongoDB /api/all-classes:', error);
     res.status(500).json({ message: 'Erreur serveur.' });
@@ -258,8 +256,6 @@ app.post('/api/generate-word', async (req, res) => {
     const zip = new PizZip(templateBuffer);
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
-      // La syntaxe {@notes} doit être utilisée dans le template Word pour injecter ce XML.
-      // Si {notes} est utilisé, le XML sera affiché comme du texte brut.
       nullGetter: () => "",
     });
 
@@ -453,7 +449,7 @@ app.post('/api/full-report-by-class', async (req, res) => {
   }
 });
 
-// --------------------- Génération IA (REST, v1beta) --------------------
+// --------------------- Génération IA (REST, v1) ------------------------
 
 app.post('/api/generate-ai-lesson-plan', async (req, res) => {
   try {
@@ -462,7 +458,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
       return res.status(503).json({ message: "Le service IA n'est pas initialisé. Vérifiez la clé API GEMINI du serveur." });
     }
 
-    const lessonTemplateUrl = process.env.LESSON_TEMPLATE_URL;
+    const lessonTemplateUrl = process.env.LESSON_TEMPLATE_URL || LESSON_TEMPLATE_URL;
     if (!lessonTemplateUrl) {
       return res.status(503).json({ message: "L'URL du modèle de leçon Word n'est pas configurée." });
     }
@@ -533,14 +529,14 @@ Generate a response in valid JSON format only. Use the following JSON structure 
 Génère une réponse au format JSON valide uniquement selon la structure suivante (valeurs concrètes et professionnelles en français) : ${jsonStructure}`;
     }
 
-    // === CORRECTION : modèle & endpoint ===
-    const MODEL_NAME = "gemini-1.5-flash"; // MODÈLE MIS À JOUR
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
+    // === CORRECTION : modèle & endpoint v1 + response_mime_type snake_case ===
+    const MODEL_NAME = "gemini-1.5-flash-latest"; // ou "gemini-1.5-flash-001" si tu veux figer
+    const API_URL = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
 
     const requestBody = {
       contents: [{ role: "user", parts: [{ text: prompt }]}],
       generationConfig: {
-        responseMimeType: "application/json"
+        response_mime_type: "application/json"
       }
     };
 
@@ -553,17 +549,34 @@ Génère une réponse au format JSON valide uniquement selon la structure suivan
     if (!aiResponse.ok) {
       const errorBody = await aiResponse.json().catch(() => ({}));
       console.error("Erreur de l'API Google AI:", JSON.stringify(errorBody, null, 2));
-      throw new Error(`[${aiResponse.status} ${aiResponse.statusText}] ${errorBody.error?.message || 'Erreur inconnue de l\'API.'}`);
+      throw new Error(`[${aiResponse.status} ${aiResponse.statusText}] ${errorBody.error?.message || "Erreur inconnue de l'API."}`);
     }
 
     const aiResult = await aiResponse.json();
-    const text = aiResult?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+
+    // Extraction robuste du texte JSON renvoyé
+    let text = "";
+    try {
+      text = aiResult?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (!text && Array.isArray(aiResult?.candidates?.[0]?.content?.parts)) {
+        text = aiResult.candidates[0].content.parts.map(p => p.text || "").join("").trim();
+      }
+      if (!text && aiResult?.candidates?.[0]?.output_text) {
+        text = String(aiResult.candidates[0].output_text).trim();
+      }
+    } catch (_) {}
+
+    if (!text) {
+      console.error("Réponse IA vide ou non reconnue:", JSON.stringify(aiResult, null, 2));
+      return res.status(500).json({ message: "Réponse IA vide ou non reconnue." });
+    }
+
     let aiData;
     try {
       aiData = JSON.parse(text);
     } catch (e) {
       console.error("Erreur de parsing JSON de la réponse de l'IA:", text);
-      return res.status(500).json({ message: "L'IA a retourné une réponse mal formée." });
+      return res.status(500).json({ message: "L'IA a retourné une réponse mal formée (JSON invalide)." });
     }
 
     // Préparer le DOCX

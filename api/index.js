@@ -38,7 +38,10 @@ const formatTextForWord = (text, options = {}) => {
 
   let paragraphProperties = '';
   if (containsArabic(text)) {
-    paragraphProperties = '<w:pPr><w:jc w:val="right"/><w:bidi/></w:pPr>';
+    // CORRECTION #3: Inversion de l'ordre de bidi et jc pour une meilleure compatibilité.
+    // La balise <w:bidi/> indique au paragraphe d'adopter une direction de droite à gauche.
+    // La balise <w:jc w:val="right"/> assure que l'alignement visuel du texte est à droite.
+    paragraphProperties = '<w:pPr><w:bidi/><w:jc w:val="right"/></w:pPr>';
     runPropertiesParts.push('<w:rtl/>');
   }
 
@@ -255,6 +258,8 @@ app.post('/api/generate-word', async (req, res) => {
     const zip = new PizZip(templateBuffer);
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
+      // La syntaxe {@notes} doit être utilisée dans le template Word pour injecter ce XML.
+      // Si {notes} est utilisé, le XML sera affiché comme du texte brut.
       nullGetter: () => "",
     });
 
@@ -529,7 +534,7 @@ Génère une réponse au format JSON valide uniquement selon la structure suivan
     }
 
     // === CORRECTION : modèle & endpoint ===
-    const MODEL_NAME = "gemini-2.5-flash";
+    const MODEL_NAME = "gemini-1.5-flash"; // MODÈLE MIS À JOUR
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
 
     const requestBody = {

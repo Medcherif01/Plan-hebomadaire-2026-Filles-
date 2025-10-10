@@ -1,4 +1,4 @@
-// api/index.js — Version REST (fetch) corrigée et stabilisée
+// api/index.js — Version REST (fetch) corrigée et stabilisée (v1 + responseMimeType)
 
 const express = require('express');
 const cors = require('cors');
@@ -529,14 +529,14 @@ Generate a response in valid JSON format only. Use the following JSON structure 
 Génère une réponse au format JSON valide uniquement selon la structure suivante (valeurs concrètes et professionnelles en français) : ${jsonStructure}`;
     }
 
-    // === CORRECTION : modèle & endpoint v1 + response_mime_type snake_case ===
-    const MODEL_NAME = "gemini-1.5-flash-latest"; // ou "gemini-1.5-flash-001" si tu veux figer
+    // === v1 endpoint + camelCase responseMimeType ===
+    const MODEL_NAME = "gemini-1.5-flash-latest"; // ou "gemini-1.5-flash-001"
     const API_URL = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
 
     const requestBody = {
       contents: [{ role: "user", parts: [{ text: prompt }]}],
       generationConfig: {
-        response_mime_type: "application/json"
+        responseMimeType: "application/json"
       }
     };
 
@@ -571,12 +571,13 @@ Génère une réponse au format JSON valide uniquement selon la structure suivan
       return res.status(500).json({ message: "Réponse IA vide ou non reconnue." });
     }
 
+    // Parse JSON avec petit nettoyage si Markdown
     let aiData;
     try {
       aiData = JSON.parse(text);
     } catch (e) {
-      console.error("Erreur de parsing JSON de la réponse de l'IA:", text);
-      return res.status(500).json({ message: "L'IA a retourné une réponse mal formée (JSON invalide)." });
+      const cleaned = text.replace(/^```json\s*|\s*```$/g, '');
+      aiData = JSON.parse(cleaned);
     }
 
     // Préparer le DOCX

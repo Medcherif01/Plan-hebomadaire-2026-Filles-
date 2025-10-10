@@ -1,4 +1,4 @@
-// api/index.js — Version REST (fetch) corrigée et stabilisée (v1, sans generationConfig)
+// api/index.js — v1, sélection dynamique du modèle, sortie JSON via prompt (sans generationConfig)
 
 const express = require('express');
 const cors = require('cors');
@@ -113,6 +113,52 @@ function getDateForDayNameNode(weekStartDate, dayName) {
   return specificDate;
 }
 const findKey = (obj, target) => obj ? Object.keys(obj).find(k => k.trim().toLowerCase() === target.toLowerCase()) : undefined;
+
+// ======================= Sélection dynamique du modèle ==================
+
+/**
+ * Liste les modèles disponibles via l'API v1 et retourne le premier modèle
+ * correspondant à la liste de préférence ET supportant generateContent.
+ *
+ * On gère les changements de noms (EoL des 1.5, arrivée des 2.5, etc.).
+ */
+async function resolveGeminiModel(apiKey) {
+  const url = `https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => "");
+    throw new Error(`Impossible de lister les modèles (HTTP ${resp.status}) ${body}`);
+  }
+  const json = await resp.json();
+  const models = Array.isArray(json.models) ? json.models : [];
+
+  // Préférence (ordre décroissant) – ajuste si besoin selon tes coûts/perf
+  const preferredNames = [
+    // Généraux actuels
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash-lite",
+    // Anciennes séries (si encore exposées pour ta clé)
+    "gemini-1.5-flash-001",
+    "gemini-1.5-pro-002",
+    "gemini-1.5-flash"
+  ];
+
+  const nameSet = new Map(models.map(m => [m.name, m]));
+  // Cherche d'abord dans les préférés
+  for (const short of preferredNames) {
+    const full = `models/${short}`;
+    const m = nameSet.get(full);
+    if (m && Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent")) {
+      return short;
+    }
+  }
+  // Sinon, prends le premier qui supporte generateContent
+  const any = models.find(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"));
+  if (any) return any.name.replace(/^models\//, "");
+
+  throw new Error("Aucun modèle compatible v1 trouvé pour votre clé (generateContent). Vérifiez l’accès de la clé et l’API activée.");
+}
 
 // ------------------------- Auth & CRUD simples -------------------------
 
@@ -449,7 +495,7 @@ app.post('/api/full-report-by-class', async (req, res) => {
   }
 });
 
-// --------------------- Génération IA (REST, v1, sans generationConfig) -
+// --------------------- Génération IA (REST, v1, modèle dynamique) ------
 
 app.post('/api/generate-ai-lesson-plan', async (req, res) => {
   try {
@@ -481,8 +527,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
 
     // Extraire données
     const enseignant = rowData[findKey(rowData, 'Enseignant')] || '';
-    theClasse = rowData[findKey(rowData, 'Classe')] || ''; // (nom variable distinct de 'class' réservé)
-    const classe = theClasse;
+    const classe = rowData[findKey(rowData, 'Classe')] || '';
     const matiere = rowData[findKey(rowData, 'Matière')] || '';
     const lecon = rowData[findKey(rowData, 'Leçon')] || '';
     const jour = rowData[findKey(rowData, 'Jour')] || '';
@@ -510,7 +555,7 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
     if (englishTeachers.includes(enseignant)) {
       prompt = `Return ONLY valid JSON. No markdown, no code fences, no commentary.
 
-As an expert pedagogical assistant, create a detailed 45-minute lesson plan in English. Structure the lesson into timed phases. Intelligently integrate the teacher's existing notes:
+As an expert pedagogical assistant, create a detailed 45-minute lesson plan in English. Structure the lesson into timed phases and integrate the teacher's existing notes:
 - Subject: ${matiere}, Class: ${classe}, Lesson Topic: ${lecon}
 - Planned Classwork: ${travaux}
 - Mentioned Support/Materials: ${support}
@@ -521,36 +566,36 @@ ${jsonStructure}`;
     } else if (arabicTeachers.includes(enseignant)) {
       prompt = `أعد فقط JSON صالحًا. بدون Markdown أو أسوار كود أو تعليقات.
 
-بصفتك مساعدًا تربويًا خبيرًا، قم بإنشاء خطة درس مفصلة باللغة العربية مدتها 45 دقيقة. قم ببناء الدرس في مراحل محددة بوقت. ادمج بذكاء ملاحظات المعلم الحالية:
-- المادة: ${matiere}، الفصل: ${classe}، موضوع الدرس: ${lecon}
-- أعمال الفصل المخطط لها: ${travaux}
-- الدعم/المواد المذكورة: ${support}
+بصفتك مساعدًا تربويًا خبيرًا، أنشئ خطة درس مفصلة باللغة العربية مدتها 45 دقيقة. قم ببناء الدرس في مراحل محددة زمنياً وادمج ملاحظات المعلم:
+- المادة: ${matiere}، الفصل: ${classe}، الموضوع: ${lecon}
+- أعمال الصف المخطط لها: ${travaux}
+- الدعم/المواد: ${support}
 - الواجبات المخطط لها: ${devoirsPrevus}
 
-استخدم البنية التالية مع قيم مهنية وملموسة (المفاتيح كما هي بالإنجليزية):
+استخدم البنية التالية بالقيم المهنية والملموسة (المفاتيح كما هي بالإنجليزية):
 ${jsonStructure}`;
     } else {
       prompt = `Renvoie UNIQUEMENT du JSON valide. Pas de markdown, pas de blocs de code, pas de commentaire.
 
-En tant qu'assistant pédagogique expert, crée un plan de leçon détaillé de 45 minutes en français. Structure la leçon en phases chronométrées. Intègre intelligemment les notes existantes de l'enseignant :
+En tant qu'assistant pédagogique expert, crée un plan de leçon détaillé de 45 minutes en français. Structure en phases chronométrées et intègre les notes de l'enseignant :
 - Matière : ${matiere}, Classe : ${classe}, Thème : ${lecon}
-- Travaux de classe prévus : ${travaux}
-- Support/Matériel mentionné : ${support}
+- Travaux de classe : ${travaux}
+- Support/Matériel : ${support}
 - Devoirs prévus : ${devoirsPrevus}
 
-Utilise la structure JSON suivante (valeurs concrètes et professionnelles en français ; clés exactement identiques) :
+Utilise la structure JSON suivante (valeurs concrètes et professionnelles ; clés strictement identiques) :
 ${jsonStructure}`;
     }
 
-    // === v1 endpoint (sans generationConfig) ===
-    const MODEL_NAME = "gemini-1.5-flash-latest"; // ou "gemini-1.5-flash-001"
+    // === Résolution dynamique du modèle compatible v1 ===
+    const MODEL_NAME = await resolveGeminiModel(GEMINI_API_KEY);
     const API_URL = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
 
     const requestBody = {
       contents: [
         { role: "user", parts: [{ text: prompt }] }
       ]
-      // Pas de generationConfig ici pour éviter l'erreur 400
+      // Pas de generationConfig pour éviter les 400 sur certains déploiements
     };
 
     const aiResponse = await fetch(API_URL, {

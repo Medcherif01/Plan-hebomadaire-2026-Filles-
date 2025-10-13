@@ -60,7 +60,7 @@ const MONGO_URL = process.env.MONGO_URL;
 const WORD_TEMPLATE_URL = process.env.WORD_TEMPLATE_URL;
 const LESSON_TEMPLATE_URL = process.env.LESSON_TEMPLATE_URL;
 
-const arabicTeachers = ['Amal Najar', 'Emen', 'Fatima', 'Ghadah', 'Hana'];
+const arabicTeachers = ['Sara', 'Amal Najar', 'Emen', 'Fatima', 'Ghadah', 'Hana'];
 const englishTeachers = ['Jana','Amal','Farah','Tayba','Shanoja'];
 
 const specificWeekDateRangesNode = {
@@ -690,3 +690,4 @@ ${jsonStructure}`;
 });
 
 module.exports = app;
+

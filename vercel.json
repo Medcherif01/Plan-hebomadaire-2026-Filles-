@@ -5,7 +5,13 @@
     { "src": "public/**", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "^/api/(.*)", "dest": "api/index.js" },
-    { "src": "/(.*)", "dest": "public/$1" }
+    { "src": "/api/(.*)", "dest": "/api/index.js" },
+    { "src": "/(.*)", "dest": "/public/$1" }
+  ],
+  "crons": [
+    {
+      "path": "/api/check-incomplete-and-notify",
+      "schedule": "0 6 * * 2"
+    }
   ]
 }

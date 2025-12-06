@@ -8,6 +8,7 @@ const PizZip = require('pizzip');
 const Docxtemplater = require('docxtemplater');
 const fetch = require('node-fetch');
 const { MongoClient } = require('mongodb');
+const webpush = require('web-push');
 
 // ========================================================================
 // ====================== AIDES POUR GÉNÉRATION WORD ======================
@@ -30,6 +31,10 @@ const formatTextForWord = (text, options = {}) => {
   if (!text || typeof text !== 'string' || text.trim() === '') {
     return '<w:p/>';
   }
+  
+  // Nettoyer le texte : supprimer les espaces/sauts de ligne avant et après
+  const cleanedText = text.trim();
+  
   const { color, italic } = options;
   const runPropertiesParts = [];
   runPropertiesParts.push('<w:sz w:val="22"/><w:szCs w:val="22"/>');
@@ -37,13 +42,16 @@ const formatTextForWord = (text, options = {}) => {
   if (italic) runPropertiesParts.push('<w:i/><w:iCs w:val="true"/>');
 
   let paragraphProperties = '';
-  if (containsArabic(text)) {
-    paragraphProperties = '<w:pPr><w:bidi/><w:jc w:val="right"/></w:pPr>';
+  if (containsArabic(cleanedText)) {
+    // Pour le texte arabe : RTL + centré
+    paragraphProperties = '<w:pPr><w:bidi/><w:jc w:val="center"/></w:pPr>';
     runPropertiesParts.push('<w:rtl/>');
   }
 
   const runProperties = `<w:rPr>${runPropertiesParts.join('')}</w:rPr>`;
-  const lines = text.split(/\r\n|\n|\r/);
+  
+  // Conserver uniquement les sauts de ligne intentionnels de l'enseignant
+  const lines = cleanedText.split(/\r\n|\n|\r/);
   const content = lines
     .map(line => `<w:t xml:space="preserve">${xmlEscape(line)}</w:t>`)
     .join('<w:br/>');
@@ -60,6 +68,23 @@ const MONGO_URL = process.env.MONGO_URL;
 const WORD_TEMPLATE_URL = process.env.WORD_TEMPLATE_URL;
 const LESSON_TEMPLATE_URL = process.env.LESSON_TEMPLATE_URL;
 
+// Configuration Web Push (VAPID)
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BDuAoL4lagqZmYl4BPdCFYBwRhoqGMrcWUFAbF1pMBWq2e0JOV6fL_WitURlXXhXTROGB2vYpnvgSDZfAoZq0Jo';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'TVK1zF6o5s-SK3OQnGCMgu4KZCNxg3py4YA4sMqtItg';
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@plan-hebdomadaire.com';
+
+// Configuration de web-push avec les clés VAPID
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    VAPID_SUBJECT,
+    VAPID_PUBLIC_KEY,
+    VAPID_PRIVATE_KEY
+  );
+  console.log('✅ Web Push VAPID configuré');
+} else {
+  console.warn('⚠️ Clés VAPID manquantes - notifications push désactivées');
+}
+
 const arabicTeachers = ['Sara', 'Amal Najar', 'Emen', 'Fatima', 'Ghadah', 'Hana'];
 const englishTeachers = ['Jana','Amal','Farah','Tayba','Shanoja'];
 
@@ -72,7 +97,7 @@ const specificWeekDateRangesNode = {
 };
 
 const validUsers = {
- "Mohamed": "Mohamed", "Zohra": "Zohra", "Jana": "Jana", "Aichetou": "Aichetou",
+  "Mohamed": "Mohamed", "Zohra": "Zohra", "Jana": "Jana", "Aichetou": "Aichetou",
   "Amal": "Amal", "Amal Najar": "Amal Najar", "Ange": "Ange", "Anouar": "Anouar",
   "Emen": "Emen", "Farah": "Farah", "Fatima": "Fatima", "Ghadah": "Ghadah",
   "Hana": "Hana", "Samira": "Samira", "Tayba": "Tayba", "Shanoja": "Shanoja",
@@ -157,7 +182,7 @@ async function resolveGeminiModel(apiKey) {
   const any = models.find(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"));
   if (any) return any.name.replace(/^models\//, "");
 
-  throw new Error("Aucun modèle compatible v1 trouvé pour votre clé (generateContent). Vérifiez l’accès de la clé et l’API activée.");
+  throw new Error("Aucun modèle compatible v1 trouvé pour votre clé (generateContent). Vérifiez l'accès de la clé et l'API activée.");
 }
 
 // ------------------------- Auth & CRUD simples -------------------------
@@ -689,5 +714,256 @@ ${jsonStructure}`;
   }
 });
 
-module.exports = app;
+// --------------------- Système de Notifications Push ---------------------
 
+// Stocker les abonnements push (en production, utiliser une vraie DB)
+const pushSubscriptions = new Map();
+
+// Sauvegarder un abonnement push
+app.post('/api/subscribe-push', async (req, res) => {
+  try {
+    const { username, subscription } = req.body;
+    if (!username || !subscription) {
+      return res.status(400).json({ message: 'Username et subscription requis.' });
+    }
+
+    // Sauvegarder dans MongoDB
+    const db = await connectToDatabase();
+    await db.collection('pushSubscriptions').updateOne(
+      { username: username },
+      { $set: { subscription: subscription, updatedAt: new Date() } },
+      { upsert: true }
+    );
+
+    // Cache local
+    pushSubscriptions.set(username, subscription);
+    
+    console.log(`✅ Abonnement push sauvegardé pour ${username}`);
+    res.status(200).json({ message: 'Abonnement enregistré avec succès.' });
+  } catch (error) {
+    console.error('Erreur /subscribe-push:', error);
+    res.status(500).json({ message: 'Erreur serveur.' });
+  }
+});
+
+// Désabonner des notifications
+app.post('/api/unsubscribe-push', async (req, res) => {
+  try {
+    const { username } = req.body;
+    if (!username) {
+      return res.status(400).json({ message: 'Username requis.' });
+    }
+
+    const db = await connectToDatabase();
+    await db.collection('pushSubscriptions').deleteOne({ username: username });
+    pushSubscriptions.delete(username);
+    
+    console.log(`✅ Désabonnement push pour ${username}`);
+    res.status(200).json({ message: 'Désabonnement réussi.' });
+  } catch (error) {
+    console.error('Erreur /unsubscribe-push:', error);
+    res.status(500).json({ message: 'Erreur serveur.' });
+  }
+});
+
+// Vérifier les enseignants incomplets et envoyer des notifications
+// Cette route sera appelée par un CRON job chaque mardi
+app.post('/api/check-incomplete-and-notify', async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    
+    // Sécurité basique avec clé API
+    if (apiKey !== process.env.CRON_API_KEY) {
+      return res.status(401).json({ message: 'Non autorisé.' });
+    }
+
+    // Déterminer la semaine actuelle
+    const currentDate = new Date();
+    let currentWeek = null;
+    
+    // Trouver la semaine actuelle
+    for (const [week, dates] of Object.entries(specificWeekDateRangesNode)) {
+      const startDate = new Date(dates.start + 'T00:00:00Z');
+      const endDate = new Date(dates.end + 'T23:59:59Z');
+      
+      if (currentDate >= startDate && currentDate <= endDate) {
+        currentWeek = parseInt(week, 10);
+        break;
+      }
+    }
+
+    if (!currentWeek) {
+      return res.status(200).json({ message: 'Aucune semaine active actuellement.' });
+    }
+
+    console.log(`📅 Vérification des plans incomplets pour la semaine ${currentWeek}`);
+
+    // Récupérer les données de la semaine
+    const db = await connectToDatabase();
+    const planDocument = await db.collection('plans').findOne({ week: currentWeek });
+    
+    if (!planDocument || !planDocument.data || planDocument.data.length === 0) {
+      return res.status(200).json({ message: `Aucune donnée pour la semaine ${currentWeek}.` });
+    }
+
+    // Trouver les enseignants avec des travaux incomplets
+    const incompleteTeachers = {};
+    const planData = planDocument.data;
+    
+    planData.forEach(item => {
+      const teacher = item[findKey(item, 'Enseignant')];
+      const taskVal = item[findKey(item, 'Travaux de classe')];
+      const className = item[findKey(item, 'Classe')];
+      
+      if (teacher && className && (taskVal == null || String(taskVal).trim() === '')) {
+        if (!incompleteTeachers[teacher]) {
+          incompleteTeachers[teacher] = new Set();
+        }
+        incompleteTeachers[teacher].add(className);
+      }
+    });
+
+    const teachersToNotify = Object.keys(incompleteTeachers);
+    console.log(`📊 ${teachersToNotify.length} enseignants avec plans incomplets:`, teachersToNotify);
+
+    // Récupérer les abonnements push depuis MongoDB
+    const subscriptions = await db.collection('pushSubscriptions').find({}).toArray();
+    
+    let notificationsSent = 0;
+    const notificationResults = [];
+
+    // Envoyer des notifications à chaque enseignant incomplet
+    for (const teacher of teachersToNotify) {
+      const subscription = subscriptions.find(sub => sub.username === teacher);
+      
+      if (subscription && subscription.subscription) {
+        const classes = [...incompleteTeachers[teacher]].sort().join(', ');
+        const message = {
+          title: '⚠️ Plan Hebdomadaire Incomplet',
+          body: `Bonjour ${teacher}, votre plan pour la semaine ${currentWeek} est incomplet pour: ${classes}. Veuillez le compléter.`,
+          icon: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
+          data: {
+            url: 'https://plan-hebdomadaire-2026-filles.vercel.app',
+            week: currentWeek,
+            teacher: teacher,
+            classes: classes
+          }
+        };
+
+        try {
+          // Envoyer la notification push via web-push
+          const payload = JSON.stringify(message);
+          
+          await webpush.sendNotification(subscription.subscription, payload);
+          
+          notificationResults.push({
+            teacher: teacher,
+            classes: classes,
+            status: 'sent',
+            message: message
+          });
+          
+          notificationsSent++;
+          console.log(`✅ Notification envoyée à ${teacher} pour ${classes}`);
+        } catch (error) {
+          console.error(`❌ Erreur notification pour ${teacher}:`, error);
+          notificationResults.push({
+            teacher: teacher,
+            status: 'error',
+            error: error.message
+          });
+          
+          // Si l'abonnement est invalide (410 Gone), le supprimer
+          if (error.statusCode === 410) {
+            console.log(`🗑️ Suppression de l'abonnement invalide pour ${teacher}`);
+            await db.collection('pushSubscriptions').deleteOne({ username: teacher });
+          }
+        }
+      } else {
+        console.log(`ℹ️ ${teacher} n'a pas d'abonnement push`);
+        notificationResults.push({
+          teacher: teacher,
+          status: 'no_subscription'
+        });
+      }
+    }
+
+    res.status(200).json({
+      message: `Vérification terminée pour la semaine ${currentWeek}.`,
+      week: currentWeek,
+      incompleteCount: teachersToNotify.length,
+      notificationsSent: notificationsSent,
+      results: notificationResults
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur /check-incomplete-and-notify:', error);
+    res.status(500).json({ message: 'Erreur serveur.' });
+  }
+});
+
+// Endpoint pour tester les notifications manuellement
+app.post('/api/test-notification', async (req, res) => {
+  try {
+    const { username } = req.body;
+    
+    if (!username) {
+      return res.status(400).json({ message: 'Username requis.' });
+    }
+
+    const db = await connectToDatabase();
+    const subscription = await db.collection('pushSubscriptions').findOne({ username: username });
+    
+    if (!subscription) {
+      return res.status(404).json({ message: `Aucun abonnement trouvé pour ${username}.` });
+    }
+
+    console.log(`🧪 Test de notification pour ${username}`);
+    
+    // Envoyer une notification de test
+    const testMessage = {
+      title: '🧪 Test de Notification',
+      body: `Bonjour ${username}, ceci est un test de notification push. Si vous voyez ce message, les notifications fonctionnent correctement !`,
+      icon: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
+      data: {
+        url: 'https://plan-hebdomadaire-2026-boys.vercel.app',
+        teacher: username
+      }
+    };
+
+    try {
+      const payload = JSON.stringify(testMessage);
+      await webpush.sendNotification(subscription.subscription, payload);
+      
+      res.status(200).json({ 
+        message: 'Notification de test envoyée avec succès.',
+        username: username,
+        hasSubscription: true
+      });
+    } catch (pushError) {
+      console.error('❌ Erreur envoi notification test:', pushError);
+      
+      // Si l'abonnement est invalide (410 Gone), le supprimer
+      if (pushError.statusCode === 410) {
+        console.log(`🗑️ Suppression de l'abonnement invalide pour ${username}`);
+        await db.collection('pushSubscriptions').deleteOne({ username: username });
+      }
+      
+      throw new Error(`Échec d'envoi: ${pushError.message}`);
+    }
+
+  } catch (error) {
+    console.error('❌ Erreur /test-notification:', error);
+    res.status(500).json({ 
+      message: 'Erreur serveur.',
+      error: error.message 
+    });
+  }
+});
+
+// Endpoint pour obtenir la clé publique VAPID (nécessaire pour le frontend)
+app.get('/api/vapid-public-key', (req, res) => {
+  res.status(200).json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+module.exports = app;

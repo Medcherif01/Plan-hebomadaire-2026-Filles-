@@ -20,7 +20,8 @@ self.addEventListener('push', (event) => {
     tag: 'plan-reminder',
     requireInteraction: true,
     data: {
-      url: '/plan-hebdomadaire-2026-filles.vercel.app'
+      url: 'https://plan-hebdomadaire-2026-boys.vercel.app',
+      playSound: true
     }
   };
 
@@ -40,7 +41,9 @@ self.addEventListener('push', (event) => {
     tag: data.tag,
     requireInteraction: data.requireInteraction,
     data: data.data,
-    vibrate: [200, 100, 200],
+    vibrate: [200, 100, 200, 100, 200],
+    silent: false, // Force le son de notification
+    renotify: true,
     actions: [
       {
         action: 'open',
@@ -53,9 +56,28 @@ self.addEventListener('push', (event) => {
     ]
   };
 
-  event.waitUntil(
-    self.registration.showNotification(data.title, options)
-  );
+  // Jouer un son de notification si demandé
+  if (data.data && data.data.playSound) {
+    // Le navigateur jouera automatiquement le son système
+    // On peut aussi envoyer un message aux clients
+    event.waitUntil(
+      Promise.all([
+        self.registration.showNotification(data.title, options),
+        self.clients.matchAll({ includeUncontrolled: true, type: 'window' }).then(clients => {
+          clients.forEach(client => {
+            client.postMessage({
+              type: 'PLAY_NOTIFICATION_SOUND',
+              data: data
+            });
+          });
+        })
+      ])
+    );
+  } else {
+    event.waitUntil(
+      self.registration.showNotification(data.title, options)
+    );
+  }
 });
 
 self.addEventListener('notificationclick', (event) => {

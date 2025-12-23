@@ -311,6 +311,53 @@ function createNotificationToggleButton(username, container) {
     return button;
 }
 
+// Jouer un son de notification
+function playNotificationSound() {
+    try {
+        // Créer un contexte audio
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Créer une série de bips
+        const playBeep = (frequency, duration, delay) => {
+            setTimeout(() => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = frequency;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + duration);
+            }, delay);
+        };
+        
+        // Triple bip pour attirer l'attention
+        playBeep(800, 0.2, 0);    // Premier bip
+        playBeep(800, 0.2, 300);  // Deuxième bip
+        playBeep(800, 0.2, 600);  // Troisième bip
+        
+        console.log('🔊 Son de notification joué');
+    } catch (error) {
+        console.error('❌ Erreur lecture son notification:', error);
+    }
+}
+
+// Écouter les messages du Service Worker pour jouer le son
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'PLAY_NOTIFICATION_SOUND') {
+            console.log('🔔 Message reçu pour jouer le son');
+            playNotificationSound();
+        }
+    });
+}
+
 // Exporter les fonctions pour utilisation globale
 if (typeof window !== 'undefined') {
     window.NotificationManager = {
@@ -319,6 +366,7 @@ if (typeof window !== 'undefined') {
         unsubscribe: unsubscribeFromPushNotifications,
         isSubscribed: isUserSubscribed,
         test: testNotification,
-        createToggleButton: createNotificationToggleButton
+        createToggleButton: createNotificationToggleButton,
+        playSound: playNotificationSound
     };
 }

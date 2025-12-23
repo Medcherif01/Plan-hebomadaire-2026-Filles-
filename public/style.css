@@ -868,6 +868,91 @@ td.editable.arabic-content {
     }
 }
 
+/* Styles pour la liste des enseignants incomplets */
+#incompleteTeachersDisplay {
+    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+    border: 2px solid #F59E0B;
+    border-radius: var(--border-radius);
+    padding: 20px;
+    margin: 20px auto;
+    max-width: 90%;
+    box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+    animation: slideInDown 0.5s ease-out;
+}
+
+#incompleteTeachersDisplay h4 {
+    color: #92400E;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#incompleteTeachersDisplay h4::before {
+    content: '⚠️';
+    font-size: 1.3em;
+}
+
+#incompleteList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+#incompleteList li {
+    background: white;
+    padding: 12px 15px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    border-left: 4px solid #F59E0B;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all var(--transition-speed);
+}
+
+#incompleteList li:hover {
+    transform: translateX(5px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.incomplete-teacher-name {
+    font-weight: 600;
+    color: #DC2626;
+    font-size: 1.05em;
+}
+
+.incomplete-class-list {
+    color: #6B7280;
+    font-size: 0.95em;
+}
+
+@keyframes slideInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Animation pulsante pour attirer l'attention */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.9;
+        transform: scale(1.02);
+    }
+}
+
+#incompleteTeachersDisplay.alert-active {
+    animation: pulse 2s ease-in-out infinite;
+}
+
 /* Amélioration de l'affichage RTL pour l'arabe */
 [dir="rtl"] .main-header-container {
     direction: rtl;

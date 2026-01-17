@@ -97,11 +97,11 @@ const specificWeekDateRangesNode = {
 };
 
 const validUsers = {
-  "Mohamed": "Mohamed", "Zohra": "Zohra", "Jana": "Jana", "Aichetou": "Aichetou",
-  "Amal": "Amal", "Amal Najar": "Amal Najar", "Ange": "Ange", "Anouar": "Anouar",
-  "Emen": "Emen", "Farah": "Farah", "Fatima": "Fatima", "Ghadah": "Ghadah",
-  "Hana": "Hana", "Samira": "Samira", "Tayba": "Tayba", "Shanoja": "Shanoja",
-  "Sara": "Sara", "Souha": "Souha", "Inas": "Inas"
+  "Mohamed": "Alkawthar@1207", "Zohra": "Alkawthar@1207", "Jana": "Alkawthar@1207", "Aichetou": "Alkawthar@1207",
+  "Amal": "Alkawthar@1207", "Amal Najar": "Alkawthar@1207", "Ange": "Alkawthar@1207", "Anouar": "Alkawthar@1207",
+  "Emen": "Alkawthar@1207", "Farah": "Alkawthar@1207", "Fatima": "Alkawthar@1207", "Ghadah": "Alkawthar@1207",
+  "Hana": "Alkawthar@1207", "Samira": "Alkawthar@1207", "Tayba": "Alkawthar@1207", "Shanoja": "Alkawthar@1207",
+  "Sara": "Alkawthar@1207", "Souha": "Alkawthar@1207", "Inas": "Alkawthar@1207"
 };
 
 let cachedDb = null;

@@ -304,9 +304,9 @@ async function generateAILessonPlansZip(selectedClasses, selectedSubjects) {
     const leconKey = findHKey('Leçon');
     const travauxKey = findHKey('Travaux de classe');
     const supportKey = findHKey('Support');
-    const devoirKey = findHKey('Devoir');
+    const devoirKey = findHKey('Devoirs');
     const jourKey = findHKey('Jour');
-    const seanceKey = findHKey('Séance');
+    const seanceKey = findHKey('Période');
     const enseignantKey = findHKey('Enseignant');
     
     // Filtrer les lignes correspondantes

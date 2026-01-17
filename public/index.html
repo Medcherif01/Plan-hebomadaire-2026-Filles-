@@ -203,6 +203,24 @@
                 
                 <div style="background: #fff; border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                     <h4 style="margin-top: 0; color: #1F2937;">
+                        <i class="fas fa-cogs"></i> Mode de génération
+                    </h4>
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 12px; cursor: pointer; padding: 12px; border: 2px solid #ddd; border-radius: 8px; transition: all 0.3s;" onclick="selectGenerationMode('individual')" id="modeIndividualLabel">
+                            <input type="radio" name="generationMode" value="individual" id="modeIndividual" checked style="margin-right: 10px;">
+                            <strong><i class="fas fa-file"></i> Génération Individuelle</strong>
+                            <p style="margin: 8px 0 0 28px; font-size: 13px; color: #6B7280;">Chaque leçon = 1 fichier Word séparé</p>
+                        </label>
+                        <label style="display: block; cursor: pointer; padding: 12px; border: 2px solid #ddd; border-radius: 8px; transition: all 0.3s;" onclick="selectGenerationMode('byTeacher')" id="modeByTeacherLabel">
+                            <input type="radio" name="generationMode" value="byTeacher" id="modeByTeacher" style="margin-right: 10px;">
+                            <strong><i class="fas fa-user-tie"></i> Génération Groupée par Enseignant</strong>
+                            <p style="margin: 8px 0 0 28px; font-size: 13px; color: #6B7280;">Tous les plans d'un enseignant = 1 fichier Word</p>
+                        </label>
+                    </div>
+                </div>
+                
+                <div style="background: #fff; border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4 style="margin-top: 0; color: #1F2937;">
                         <i class="fas fa-filter"></i> Utilisez les filtres pour sélectionner les données
                     </h4>
                     <p style="font-size: 14px; color: #6B7280; margin-bottom: 15px;">
@@ -212,6 +230,10 @@
                     <div style="background: #f9fafb; padding: 12px; border-radius: 6px; font-size: 15px; font-weight: 600; color: #1F2937; text-align: center;">
                         <i class="fas fa-list"></i> 
                         <span id="aiLessonPlanCount">0</span> ligne(s) sélectionnée(s)
+                    </div>
+                    <div id="teacherCountInfo" style="margin-top: 12px; padding: 12px; background: #e0f2fe; border-radius: 6px; font-size: 14px; color: #0369a1; text-align: center; display: none;">
+                        <i class="fas fa-users"></i> 
+                        <span id="teacherCount">0</span> enseignant(s) concerné(s)
                     </div>
                 </div>
                 

@@ -330,6 +330,62 @@
         
         // ==================== MODAL GÉNÉRATION IA PLANS DE LEÇON ====================
         
+        function selectGenerationMode(mode) {
+            const modeIndividualLabel = document.getElementById('modeIndividualLabel');
+            const modeByTeacherLabel = document.getElementById('modeByTeacherLabel');
+            const teacherCountInfo = document.getElementById('teacherCountInfo');
+            
+            if (mode === 'individual') {
+                document.getElementById('modeIndividual').checked = true;
+                if (modeIndividualLabel) {
+                    modeIndividualLabel.style.borderColor = '#0066CC';
+                    modeIndividualLabel.style.backgroundColor = '#f0f9ff';
+                }
+                if (modeByTeacherLabel) {
+                    modeByTeacherLabel.style.borderColor = '#ddd';
+                    modeByTeacherLabel.style.backgroundColor = 'white';
+                }
+                if (teacherCountInfo) {
+                    teacherCountInfo.style.display = 'none';
+                }
+            } else if (mode === 'byTeacher') {
+                document.getElementById('modeByTeacher').checked = true;
+                if (modeByTeacherLabel) {
+                    modeByTeacherLabel.style.borderColor = '#0066CC';
+                    modeByTeacherLabel.style.backgroundColor = '#f0f9ff';
+                }
+                if (modeIndividualLabel) {
+                    modeIndividualLabel.style.borderColor = '#ddd';
+                    modeIndividualLabel.style.backgroundColor = 'white';
+                }
+                if (teacherCountInfo) {
+                    teacherCountInfo.style.display = 'block';
+                    updateTeacherCount();
+                }
+            }
+        }
+        
+        function updateTeacherCount() {
+            const enseignantKey = findHKey('Enseignant');
+            if (!enseignantKey || !filteredAndSortedData || filteredAndSortedData.length === 0) {
+                const teacherCountSpan = document.getElementById('teacherCount');
+                if (teacherCountSpan) teacherCountSpan.textContent = '0';
+                return;
+            }
+            
+            const uniqueTeachers = new Set();
+            filteredAndSortedData.forEach(row => {
+                if (row[enseignantKey]) {
+                    uniqueTeachers.add(row[enseignantKey]);
+                }
+            });
+            
+            const teacherCountSpan = document.getElementById('teacherCount');
+            if (teacherCountSpan) {
+                teacherCountSpan.textContent = uniqueTeachers.size;
+            }
+        }
+        
         function openAILessonPlanModal() {
             if (!currentWeek) {
                 displayAlert("Veuillez d'abord sélectionner une semaine.", true);
@@ -346,6 +402,9 @@
             if (countSpan) {
                 countSpan.textContent = filteredAndSortedData.length;
             }
+            
+            // Réinitialiser le mode à individuel
+            selectGenerationMode('individual');
             
             // Activer/désactiver le bouton selon le nombre de lignes
             const generateBtn = document.getElementById('generateAILessonPlansBtn');
@@ -380,21 +439,58 @@
                 return;
             }
             
-            const confirmation = confirm(
-                `Générer ${filteredAndSortedData.length} plan(s) de leçon IA pour la semaine ${currentWeek} ?\n\n` +
-                `• Chaque ligne du tableau = 1 plan de leçon Word détaillé\n` +
-                `• Génération avec l'IA Gemini (peut prendre quelques minutes)\n` +
-                `• Téléchargement automatique d'un fichier ZIP\n\n` +
-                `Continuer ?`
-            );
+            // Vérifier le mode sélectionné
+            const modeIndividual = document.getElementById('modeIndividual');
+            const modeByTeacher = document.getElementById('modeByTeacher');
             
-            if (!confirmation) return;
-            
-            // Fermer la modal
-            closeAILessonPlanModal();
-            
-            // Appeler la fonction de génération
-            await generateAllAILessonPlans();
+            if (modeByTeacher && modeByTeacher.checked) {
+                // Mode groupé par enseignant
+                const enseignantKey = findHKey('Enseignant');
+                if (!enseignantKey) {
+                    displayAlert("Erreur: colonne Enseignant non trouvée.", true);
+                    return;
+                }
+                
+                const uniqueTeachers = new Set();
+                filteredAndSortedData.forEach(row => {
+                    if (row[enseignantKey]) uniqueTeachers.add(row[enseignantKey]);
+                });
+                
+                const confirmation = confirm(
+                    `Générer les plans de leçon IA groupés par enseignant pour la semaine ${currentWeek} ?\n\n` +
+                    `• ${uniqueTeachers.size} enseignant(s) concerné(s)\n` +
+                    `• ${filteredAndSortedData.length} leçon(s) au total\n` +
+                    `• Chaque enseignant = 1 fichier Word contenant tous ses plans\n` +
+                    `• Génération avec l'IA Gemini (peut prendre quelques minutes)\n` +
+                    `• Téléchargement automatique d'un fichier ZIP\n\n` +
+                    `Continuer ?`
+                );
+                
+                if (!confirmation) return;
+                
+                // Fermer la modal
+                closeAILessonPlanModal();
+                
+                // Appeler la fonction de génération groupée
+                await generateAILessonPlansByTeacher();
+            } else {
+                // Mode individuel (par défaut)
+                const confirmation = confirm(
+                    `Générer ${filteredAndSortedData.length} plan(s) de leçon IA pour la semaine ${currentWeek} ?\n\n` +
+                    `• Chaque ligne du tableau = 1 plan de leçon Word détaillé\n` +
+                    `• Génération avec l'IA Gemini (peut prendre quelques minutes)\n` +
+                    `• Téléchargement automatique d'un fichier ZIP\n\n` +
+                    `Continuer ?`
+                );
+                
+                if (!confirmation) return;
+                
+                // Fermer la modal
+                closeAILessonPlanModal();
+                
+                // Appeler la fonction de génération individuelle
+                await generateAllAILessonPlans();
+            }
         }
         
         async function generateAllAILessonPlans() { 
@@ -462,6 +558,93 @@
                 setButtonLoading("generateAILessonPlansBtn", false, "fas fa-robot"); 
             }
         }
+        
+        async function generateAILessonPlansByTeacher() {
+            if (!currentWeek) {
+                displayAlert("please_select_week", true);
+                return;
+            }
+            if (!filteredAndSortedData || filteredAndSortedData.length === 0) {
+                displayAlert("no_data_to_display_filters", true);
+                return;
+            }
+            
+            const enseignantKey = findHKey('Enseignant');
+            if (!enseignantKey) {
+                displayAlert("Erreur: colonne Enseignant non trouvée.", true);
+                return;
+            }
+            
+            // Grouper les données par enseignant
+            const dataByTeacher = {};
+            filteredAndSortedData.forEach(row => {
+                const teacher = row[enseignantKey];
+                if (teacher) {
+                    if (!dataByTeacher[teacher]) {
+                        dataByTeacher[teacher] = [];
+                    }
+                    dataByTeacher[teacher].push(row);
+                }
+            });
+            
+            const teachers = Object.keys(dataByTeacher);
+            
+            console.log(`Generating AI Lesson Plans grouped by teacher (${teachers.length} teachers) for week:`, currentWeek);
+            displayAlert(`🤖 Génération de ${filteredAndSortedData.length} plans de leçon IA groupés par ${teachers.length} enseignant(s)... Veuillez patienter.`, false);
+            setButtonLoading("generateAILessonPlansBtn", true, "fas fa-robot");
+            showProgressBar();
+            updateProgressBar(10);
+            
+            try {
+                // Appel pour générer les plans groupés par enseignant
+                const response = await fetch('/api/generate-ai-lesson-plans-by-teacher', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        week: currentWeek,
+                        dataByTeacher: dataByTeacher
+                    })
+                });
+                
+                updateProgressBar(80);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const contentDisposition = response.headers.get('content-disposition');
+                    let filename = `Plans_Lecon_IA_Par_Enseignant_S${currentWeek}.zip`;
+                    
+                    if (contentDisposition) {
+                        const filenameMatch = contentDisposition.match(/filename="?(.+?)"?(;|$)/i);
+                        if (filenameMatch && filenameMatch[1]) {
+                            filename = filenameMatch[1];
+                        }
+                    }
+                    
+                    // Télécharger le ZIP automatiquement
+                    const link = document.createElement('a');
+                    link.href = window.URL.createObjectURL(blob);
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(link.href);
+                    
+                    updateProgressBar(100);
+                    displayAlert(`✅ Plans de leçon IA générés et téléchargés!\n\n${teachers.length} fichier(s) Word (1 par enseignant)\n${filteredAndSortedData.length} leçon(s) au total\n\nFichier: ${filename}\n\nOuvrez le ZIP pour voir tous vos plans de leçon groupés par enseignant.`, false, 8000);
+                } else {
+                    const errorResult = await response.json().catch(() => ({ message: "Erreur inconnue du serveur." }));
+                    throw new Error(errorResult.message || `Erreur serveur ${response.status}`);
+                }
+            } catch (error) {
+                console.error("Error generating AI lesson plans by teacher:", error);
+                displayAlert("❌ Erreur lors de la génération des plans de leçon IA par enseignant: " + error.message, true);
+                updateProgressBar(0);
+            } finally {
+                hideProgressBar();
+                setButtonLoading("generateAILessonPlansBtn", false, "fas fa-robot");
+            }
+        }
+        
         async function generateWeeklyLessonPlans() { if (!currentWeek) { displayAlert("please_select_week", true); return; } if (!filteredAndSortedData || filteredAndSortedData.length === 0) { displayAlert("no_data_to_display_filters", true); return; } const confirmation = confirm(t("Voulez-vous générer les plans de leçons pour toutes les données affichées de la semaine " + currentWeek + " ?")); if (!confirmation) return; console.log("Generating Weekly Lesson Plans for week:", currentWeek); displayAlert("generating_weekly_lessons", false); setButtonLoading("generateWeeklyLessonsBtn", true, "fas fa-robot"); showProgressBar(); updateProgressBar(10); try { const response = await fetch("/api/generate-weekly-lesson-plans", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ week: currentWeek, data: filteredAndSortedData }) }); updateProgressBar(80); if (response.ok) { const blob = await response.blob(); const contentDisposition = response.headers.get("content-disposition"); let filename = `plans_lecons_semaine_${currentWeek}.zip`; if (contentDisposition) { const filenameMatch = contentDisposition.match(/filename="?(.+?)"?(;|$)/i); if (filenameMatch && filenameMatch[1]) { filename = filenameMatch[1]; } } saveAs(blob, filename); updateProgressBar(100); displayAlert("weekly_lessons_generated", false); } else { const errorResult = await response.json().catch(() => ({ message: "Erreur inconnue du serveur." })); throw new Error(errorResult.message || `Erreur serveur ${response.status}`); } } catch (error) { console.error("Error generating weekly lesson plans:", error); displayAlert("error_generating_ai_lesson_plan", true, { error: error.message }); updateProgressBar(0); } finally { hideProgressBar(); setButtonLoading("generateWeeklyLessonsBtn", false, "fas fa-robot"); } }
         function updateActionButtonsState(isEnabled) { document.getElementById('generateWordBtn').disabled = !isEnabled; document.getElementById('generateExcelBtn').disabled = !isEnabled; const saveAllBtn = document.getElementById('saveAllDisplayedBtn'); if (saveAllBtn) { saveAllBtn.disabled = !isEnabled || !filteredAndSortedData || filteredAndSortedData.length === 0; } const generateAllAIBtn = document.getElementById('generateAllAIBtn'); if (generateAllAIBtn) { generateAllAIBtn.disabled = !isEnabled || !filteredAndSortedData || filteredAndSortedData.length === 0; } const weeklyLessonsBtn = document.getElementById('generateWeeklyLessonsBtn'); if (weeklyLessonsBtn) { weeklyLessonsBtn.disabled = !isEnabled || !filteredAndSortedData || filteredAndSortedData.length === 0; } }
         async function saveRow(rowData, tableRowElement) { if(!rowData||typeof rowData!=='object'){displayAlert('invalid_row',true); return;} console.log("saveRow:",JSON.stringify(rowData).substring(0,100)+'...'); displayAlert(''); const btn=tableRowElement?.querySelector('.save-row-button'); const indicator=tableRowElement?.querySelector('.save-indicator'); const origBtnIcon = btn ? btn.querySelector('i')?.className || 'fas fa-check' : 'fas fa-check'; if(indicator) indicator.style.display='none'; if(btn){btn.innerHTML='<i class="fas fa-spinner fa-spin"></i>'; btn.disabled=true;} try{ if(!currentWeek){throw new Error(t('please_select_week'));} const response=await fetch('/api/save-row',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({week:currentWeek,data:rowData})}); const result=await response.json(); if(!response.ok){throw new Error(result.message||`Erreur ${response.status}`);} if(tableRowElement){tableRowElement.classList.remove('modified');} if(indicator) indicator.style.display='inline-block'; if(result.updatedData?.updatedAt&&tableRowElement){ const updK=findHKey('updatedAt'); if(updK){ rowData[updK]=result.updatedData.updatedAt; const updCell=tableRowElement.querySelector('.updated-at-column'); if(updCell){updCell.textContent=formatUpdatedAt(result.updatedData.updatedAt);} } } } catch(e){ console.error('Erreur saveRow:',e); displayAlert('error_saving_row', true, { error: e.message }); if(indicator) indicator.style.display='none'; } finally{if(btn){btn.innerHTML=`<i class="${origBtnIcon}"></i>`; btn.disabled=false;} checkAndDisplayIncompleteTeachers();} }

@@ -277,27 +277,17 @@
                 indicatorSpan.style.display = rowObj && updK && rowObj[updK] ? 'inline-block' : 'none';
                 actTd.appendChild(indicatorSpan);
                 
-                // Ajouter bouton pour télécharger le plan de leçon
-                // SEULEMENT si un plan existe ET que ce n'est PAS une matière arabe
-                const matiereKey = findHKey('Matière');
-                const matiere = rowObj ? (rowObj[matiereKey] || '') : '';
-                const arabicKeywords = [
-                    'عربي', 'العربية', 'اللغة العربية',
-                    'قرآن', 'القرآن', 'coran',
-                    'تجويد', 'التجويد', 'tajwid',
-                    'حديث', 'الحديث', 'hadith',
-                    'تربية', 'التربية', 'islamique',
-                    'توحيد', 'التوحيد', 'tawhid',
-                    'فقه', 'الفقه', 'fiqh',
-                    'arabe'
-                ];
-                const isArabicSubject = matiere && arabicKeywords.some(keyword => 
-                    matiere.toLowerCase().includes(keyword.toLowerCase())
-                );
+                // Bouton pour générer le plan de leçon IA pour cette ligne
+                const aiGenBtn = document.createElement('button');
+                aiGenBtn.innerHTML = '<i class="fas fa-robot"></i>';
+                aiGenBtn.title = 'Générer Plan de Leçon IA';
+                aiGenBtn.classList.add('ai-lesson-plan-button');
+                aiGenBtn.style.marginLeft = '5px';
+                aiGenBtn.onclick = () => generateAILessonPlan(rowObj, tr);
+                actTd.appendChild(aiGenBtn);
                 
-                // Afficher le bouton seulement si un plan de leçon existe ET ce n'est pas une matière arabe
-                if (rowObj && rowObj.lessonPlanId && !isArabicSubject) {
-                    console.log('✅ Bouton téléchargement ajouté pour:', rowObj.lessonPlanId);
+                // Bouton pour télécharger le plan de leçon (si disponible)
+                if (rowObj && rowObj.lessonPlanId) {
                     const lessonBtn = document.createElement('button');
                     lessonBtn.innerHTML = '<i class="fas fa-file-download"></i>';
                     lessonBtn.title = 'Télécharger Plan de Leçon';
@@ -305,14 +295,19 @@
                     lessonBtn.style.marginLeft = '5px';
                     lessonBtn.onclick = () => downloadLessonPlan(rowObj);
                     actTd.appendChild(lessonBtn);
-                } else if (rowObj) {
-                    // Debug: pourquoi le bouton n'apparaît pas
-                    if (!rowObj.lessonPlanId) {
-                        console.log('⚠️ Pas de lessonPlanId pour:', rowObj);
-                    }
-                    if (isArabicSubject) {
-                        console.log('⚠️ Matière arabe exclue:', matiere);
-                    }
+                }
+                
+                // Bouton pour générer TOUS les plans de leçon de cet enseignant
+                const enseignantKey = findHKey('Enseignant');
+                const enseignant = rowObj ? (rowObj[enseignantKey] || '') : '';
+                if (enseignant && (loggedInUser === 'Mohamed' || loggedInUser === 'Zohra' || loggedInUser === 'Imad')) {
+                    const teacherBtn = document.createElement('button');
+                    teacherBtn.innerHTML = '<i class="fas fa-user-graduate"></i>';
+                    teacherBtn.title = `Générer tous les plans de ${enseignant}`;
+                    teacherBtn.classList.add('teacher-all-plans-button');
+                    teacherBtn.style.marginLeft = '5px';
+                    teacherBtn.onclick = () => generateAllPlansForTeacher(enseignant);
+                    actTd.appendChild(teacherBtn);
                 }
                 tr.appendChild(actTd);
                 if (updK && tHead && tHead.querySelector('.updated-at-column')) {
@@ -326,7 +321,152 @@
             });
         }
         
-        async function generateAILessonPlan(rowData, tableRowElement) { if (!rowData || typeof rowData !== 'object') { displayAlert('invalid_row', true); return; } if (!currentWeek) { displayAlert("please_select_week", true); return; } console.log("Generating AI Lesson Plan for:", rowData); displayAlert('generating_ai_lesson_plan', false); const aiButton = tableRowElement?.querySelector('.ai-lesson-plan-button'); let originalButtonHtml = ''; let originalButtonDisabledState = false; if (aiButton) { originalButtonHtml = aiButton.innerHTML; originalButtonDisabledState = aiButton.disabled; aiButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; aiButton.disabled = true; } try { const response = await fetch('/api/generate-ai-lesson-plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ week: currentWeek, rowData: rowData }) }); if (response.ok) { const blob = await response.blob(); const contentDisposition = response.headers.get('content-disposition'); let filename = `plan_lecon_S${currentWeek}_AI_genere.xlsx`; if (contentDisposition) { const filenameMatch = contentDisposition.match(/filename="?(.+?)"?(;|$)/i); if (filenameMatch && filenameMatch[1]) { filename = filenameMatch[1]; } } saveAs(blob, filename); displayAlert('ai_lesson_plan_generated', false); } else { const errorResult = await response.json().catch(() => ({ message: "Erreur inconnue du serveur." })); throw new Error(errorResult.message || `Erreur serveur ${response.status}`); } } catch (error) { console.error('Error generating AI lesson plan:', error); displayAlert('error_generating_ai_lesson_plan', true, { error: error.message }); } finally { if (aiButton) { aiButton.innerHTML = originalButtonHtml; aiButton.disabled = originalButtonDisabledState; } } }
+        async function generateAILessonPlan(rowData, tableRowElement) {
+            if (!rowData || typeof rowData !== 'object') {
+                displayAlert('invalid_row', true);
+                return;
+            }
+            if (!currentWeek) {
+                displayAlert("please_select_week", true);
+                return;
+            }
+            
+            console.log("Generating AI Lesson Plan for:", rowData);
+            displayAlert('generating_ai_lesson_plan', false);
+            
+            const aiButton = tableRowElement?.querySelector('.ai-lesson-plan-button');
+            let originalButtonHtml = '';
+            let originalButtonDisabledState = false;
+            
+            if (aiButton) {
+                originalButtonHtml = aiButton.innerHTML;
+                originalButtonDisabledState = aiButton.disabled;
+                aiButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                aiButton.disabled = true;
+            }
+            
+            try {
+                const response = await fetch('/api/generate-ai-lesson-plan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ week: currentWeek, rowData: rowData })
+                });
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const contentDisposition = response.headers.get('content-disposition');
+                    let filename = `plan_lecon_S${currentWeek}_AI_genere.docx`;
+                    
+                    if (contentDisposition) {
+                        const filenameMatch = contentDisposition.match(/filename="?(.+?)"?(;|$)/i);
+                        if (filenameMatch && filenameMatch[1]) {
+                            filename = filenameMatch[1];
+                        }
+                    }
+                    
+                    saveAs(blob, filename);
+                    displayAlert('ai_lesson_plan_generated', false);
+                } else {
+                    const errorResult = await response.json().catch(() => ({ message: "Erreur inconnue du serveur." }));
+                    throw new Error(errorResult.message || `Erreur serveur ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Error generating AI lesson plan:', error);
+                displayAlert('error_generating_ai_lesson_plan', true, { error: error.message });
+            } finally {
+                if (aiButton) {
+                    aiButton.innerHTML = originalButtonHtml;
+                    aiButton.disabled = originalButtonDisabledState;
+                }
+            }
+        }
+        
+        async function generateAllPlansForTeacher(teacherName) {
+            if (!currentWeek) {
+                displayAlert("please_select_week", true);
+                return;
+            }
+            
+            if (!teacherName) {
+                displayAlert("Enseignant non spécifié.", true);
+                return;
+            }
+            
+            // Filtrer les données pour cet enseignant
+            const enseignantKey = findHKey('Enseignant');
+            if (!enseignantKey) {
+                displayAlert("Erreur: colonne Enseignant non trouvée.", true);
+                return;
+            }
+            
+            const teacherData = filteredAndSortedData.filter(row => row[enseignantKey] === teacherName);
+            
+            if (teacherData.length === 0) {
+                displayAlert(`Aucune leçon trouvée pour ${teacherName}.`, true);
+                return;
+            }
+            
+            const confirmation = confirm(
+                `Générer ${teacherData.length} plan(s) de leçon IA pour ${teacherName} ?\n\n` +
+                `• Semaine ${currentWeek}\n` +
+                `• ${teacherData.length} leçon(s)\n` +
+                `• Téléchargement d'un fichier ZIP\n\n` +
+                `Continuer ?`
+            );
+            
+            if (!confirmation) return;
+            
+            console.log(`Génération de tous les plans pour ${teacherName}:`, teacherData);
+            displayAlert(`🤖 Génération de ${teacherData.length} plans pour ${teacherName}...`, false);
+            showProgressBar();
+            updateProgressBar(10);
+            
+            try {
+                const response = await fetch('/api/generate-multiple-ai-lesson-plans', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        week: currentWeek,
+                        rowsData: teacherData
+                    })
+                });
+                
+                updateProgressBar(80);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const contentDisposition = response.headers.get('content-disposition');
+                    let filename = `Plans_${teacherName.replace(/\s+/g, '_')}_S${currentWeek}.zip`;
+                    
+                    if (contentDisposition) {
+                        const filenameMatch = contentDisposition.match(/filename="?(.+?)"?(;|$)/i);
+                        if (filenameMatch && filenameMatch[1]) {
+                            filename = filenameMatch[1];
+                        }
+                    }
+                    
+                    const link = document.createElement('a');
+                    link.href = window.URL.createObjectURL(blob);
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(link.href);
+                    
+                    updateProgressBar(100);
+                    displayAlert(`✅ ${teacherData.length} plans de leçon générés pour ${teacherName}!`, false);
+                } else {
+                    const errorResult = await response.json().catch(() => ({ message: "Erreur inconnue du serveur." }));
+                    throw new Error(errorResult.message || `Erreur serveur ${response.status}`);
+                }
+            } catch (error) {
+                console.error("Error generating teacher plans:", error);
+                displayAlert(`❌ Erreur: ${error.message}`, true);
+                updateProgressBar(0);
+            } finally {
+                hideProgressBar();
+            }
+        }
         
         // ==================== MODAL GÉNÉRATION IA PLANS DE LEÇON ====================
         

@@ -1167,7 +1167,8 @@ ${jsonStructure}`;
         .replace(/__+/g, '_');
     };
 
-    const filename = `Plan de lecon-${sanitizeForFilename(matiere)}-${sanitizeForFilename(seance)}-${sanitizeForFilename(classe)}-Semaine${weekNumber}.docx`;
+    // Format: Matière_Classe_Semaine_Séance_Enseignant.docx
+    const filename = `${sanitizeForFilename(matiere)}_${sanitizeForFilename(classe)}_S${weekNumber}_P${sanitizeForFilename(seance)}_${sanitizeForFilename(enseignant)}.docx`;
     console.log(`📄 [AI Lesson Plan] Envoi du fichier: ${filename}`);
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
@@ -1398,7 +1399,8 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
             .replace(/__+/g, '_');
         };
 
-        const docFilename = `${i+1}-Plan_Lecon-${sanitizeForFilename(matiere)}-${sanitizeForFilename(classe)}-S${weekNumber}.docx`;
+        // Format: Matière_Classe_Semaine_Séance_Enseignant.docx
+        const docFilename = `${sanitizeForFilename(matiere)}_${sanitizeForFilename(classe)}_S${weekNumber}_P${sanitizeForFilename(seance)}_${sanitizeForFilename(enseignant)}.docx`;
         
         // Ajouter au ZIP
         archive.append(docBuffer, { name: docFilename });

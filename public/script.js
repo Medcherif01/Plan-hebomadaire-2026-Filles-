@@ -12,6 +12,9 @@
         let weeklyClassNotes = {};
         let alertTimeoutId = null;
         let incompleteTeachersInfo = {};
+        
+        // Version d'authentification pour forcer la déconnexion
+        const AUTH_VERSION = 2; // Incrémenter pour forcer tous les utilisateurs à se reconnecter
 
         const arabicTeachers = ['Sara', 'Amal Najar', 'Emen', 'Fatima', 'Ghadah', 'Hana'];
         const englishTeachers = ['Jana','Amal','Farah','Tayba','Shanoja'];
@@ -591,6 +594,7 @@
                 
                 if (response.ok && result.success) {
                     localStorage.setItem('loggedInUser', result.username);
+                    localStorage.setItem('authVersion', AUTH_VERSION.toString());
                     initializeApp(result.username);
                 } else {
                     errorDiv.textContent = result.message || "Échec connexion.";
@@ -616,6 +620,7 @@
         function handleLogout() {
             console.log("Déconnexion par:", loggedInUser);
             localStorage.removeItem('loggedInUser');
+            localStorage.removeItem('authVersion');
             
             loggedInUser = null;
             currentWeek = null;
@@ -670,11 +675,29 @@
                 });
             }
             
+            // Vérifier la version d'authentification
             const savedUser = localStorage.getItem('loggedInUser');
-            if (savedUser) {
+            const savedAuthVersion = localStorage.getItem('authVersion');
+            
+            if (savedUser && savedAuthVersion && parseInt(savedAuthVersion) === AUTH_VERSION) {
                 console.log(`Utilisateur trouvé dans la session : '${savedUser}'. Connexion automatique.`);
                 initializeApp(savedUser);
             } else {
+                if (savedUser) {
+                    console.log('🔴 Version d\'authentification obsolète. Déconnexion automatique pour mise à jour du mot de passe.');
+                    localStorage.removeItem('loggedInUser');
+                    localStorage.removeItem('authVersion');
+                    
+                    // Afficher un message d'information à l'utilisateur
+                    const errorDiv = document.getElementById('login-error');
+                    if (errorDiv) {
+                        errorDiv.textContent = '⚠️ Mise à jour de sécurité : Veuillez vous reconnecter avec le nouveau mot de passe.';
+                        errorDiv.style.display = 'block';
+                        errorDiv.style.backgroundColor = '#fff3cd';
+                        errorDiv.style.color = '#856404';
+                        errorDiv.style.borderColor = '#ffc107';
+                    }
+                }
                 console.log("Aucun utilisateur en session, affichage du formulaire de connexion.");
                 document.getElementById('login-form').style.display = 'block';
                 document.getElementById('main-content').style.display = 'none';

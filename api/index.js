@@ -1304,6 +1304,14 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
         const devoirsPrevus = rowData[findKey(rowData, 'Devoirs')] || 'Non spécifié';
 
         console.log(`📝 [${i+1}/${rowsData.length}] ${enseignant} | ${classe} | ${matiere}`);
+        console.log(`  ├─ Leçon: "${lecon.substring(0, 50)}${lecon.length > 50 ? '...' : ''}"`);
+        console.log(`  ├─ Travaux: "${travaux.substring(0, 30)}${travaux.length > 30 ? '...' : ''}"`);
+        console.log(`  └─ Support: "${support.substring(0, 30)}${support.length > 30 ? '...' : ''}"`);
+        
+        // Vérification: si la leçon est vide, on ne peut pas générer
+        if (!lecon || lecon.trim() === '') {
+          throw new Error('⚠️ Leçon vide - impossible de générer un plan de leçon sans contenu de leçon');
+        }
 
         // Date formatée
         let formattedDate = "";
@@ -1414,12 +1422,40 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
         }
 
       } catch (error) {
-        console.error(`❌ Erreur pour ligne ${i+1}:`, error.message);
+        const classe = rowData[findKey(rowData, 'Classe')] || 'Unknown';
+        const matiere = rowData[findKey(rowData, 'Matière')] || 'Unknown';
+        const enseignant = rowData[findKey(rowData, 'Enseignant')] || 'Unknown';
+        const lecon = rowData[findKey(rowData, 'Leçon')] || 'VIDE';
+        
+        console.error(`❌ Erreur pour ligne ${i+1}:`, {
+          error: error.message,
+          stack: error.stack,
+          classe,
+          matiere,
+          enseignant,
+          lecon: lecon.substring(0, 50) // Premiers 50 caractères
+        });
         errorCount++;
         
-        // Ajouter un fichier texte d'erreur dans le ZIP
-        const errorFilename = `${i+1}-ERREUR-${rowData[findKey(rowData, 'Classe')] || 'Unknown'}.txt`;
-        archive.append(`Erreur de génération: ${error.message}`, { name: errorFilename });
+        // Ajouter un fichier texte d'erreur DÉTAILLÉ dans le ZIP
+        const errorFilename = `ERREUR_${i+1}_${sanitizeForFilename(classe)}_${sanitizeForFilename(matiere)}.txt`;
+        const errorContent = `❌ ERREUR DE GÉNÉRATION
+        
+Ligne: ${i+1}/${rowsData.length}
+Classe: ${classe}
+Matière: ${matiere}
+Enseignant: ${enseignant}
+Leçon: ${lecon.substring(0, 200)}
+
+Erreur: ${error.message}
+
+Stack trace:
+${error.stack}
+
+Données complètes:
+${JSON.stringify(rowData, null, 2)}
+`;
+        archive.append(errorContent, { name: errorFilename });
       }
     }
 

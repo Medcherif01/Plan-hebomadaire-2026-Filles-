@@ -159,6 +159,16 @@ function getDateForDayNameNode(weekStartDate, dayName) {
 }
 const findKey = (obj, target) => obj ? Object.keys(obj).find(k => k.trim().toLowerCase() === target.toLowerCase()) : undefined;
 
+// ======================= Fonction utilitaire pour les noms de fichiers ==
+const sanitizeForFilename = (str) => {
+  if (typeof str !== 'string') str = String(str);
+  const normalized = str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return normalized
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9-]/g, '_')
+    .replace(/__+/g, '_');
+};
+
 // ======================= Sélection dynamique du modèle ==================
 
 /**
@@ -1158,15 +1168,6 @@ ${jsonStructure}`;
     doc.render(templateData);
     const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 
-    const sanitizeForFilename = (str) => {
-      if (typeof str !== 'string') str = String(str);
-      const normalized = str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      return normalized
-        .replace(/\s+/g, '-')
-        .replace(/[^a-zA-Z0-9-]/g, '_')
-        .replace(/__+/g, '_');
-    };
-
     // Format: Matière_Classe_Semaine_Séance_Enseignant.docx
     const filename = `${sanitizeForFilename(matiere)}_${sanitizeForFilename(classe)}_S${weekNumber}_P${sanitizeForFilename(seance)}_${sanitizeForFilename(enseignant)}.docx`;
     console.log(`📄 [AI Lesson Plan] Envoi du fichier: ${filename}`);
@@ -1397,15 +1398,6 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
 
         doc.render(templateData);
         const docBuffer = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
-
-        // Nom de fichier unique
-        const sanitizeForFilename = (str) => {
-          if (typeof str !== 'string') str = String(str);
-          return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-            .replace(/\s+/g, '-')
-            .replace(/[^a-zA-Z0-9-]/g, '_')
-            .replace(/__+/g, '_');
-        };
 
         // Format: Matière_Classe_Semaine_Séance_Enseignant.docx
         const docFilename = `${sanitizeForFilename(matiere)}_${sanitizeForFilename(classe)}_S${weekNumber}_P${sanitizeForFilename(seance)}_${sanitizeForFilename(enseignant)}.docx`;

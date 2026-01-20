@@ -173,81 +173,7 @@
                 <span id="notes-save-status" style="font-size: 0.9em;"></span>
             </div>
         </div>
-        <!-- Bouton compact pour ouvrir la modal de génération (coordinateur seulement) -->
-        <div id="lesson-plan-generator" class="filter-container admin-section" style="display: none;">
-            <button id="openLessonPlanModalBtn" onclick="openLessonPlanModal()" class="action-button pro-button success-button">
-                <i class="fas fa-robot"></i> <span class="btn-text">Générer Plans de Leçon IA</span>
-            </button>
-        </div>
-        
-        <!-- Modal popup pour la génération IA des plans de leçon -->
-        <div id="aiLessonPlanModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; overflow: auto;">
-            <div style="background: white; margin: 50px auto; max-width: 700px; padding: 30px; border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.3);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2 style="margin: 0;"><i class="fas fa-robot"></i> Génération IA des Plans de Leçon</h2>
-                    <button onclick="closeAILessonPlanModal()" style="background: transparent; border: none; font-size: 28px; cursor: pointer; color: #999;">×</button>
-                </div>
-                
-                <div style="background: #f0f9ff; border-left: 4px solid #0066CC; padding: 15px; margin-bottom: 20px; border-radius: 8px;">
-                    <p style="margin: 0; font-size: 14px; color: #1F2937;">
-                        <i class="fas fa-info-circle" style="color: #0066CC;"></i>
-                        <strong>Cette fonction génère des plans de leçon détaillés avec l'IA Gemini pour toutes les données affichées.</strong>
-                    </p>
-                    <p style="margin: 10px 0 0 0; font-size: 13px; color: #6B7280;">
-                        • Chaque ligne du tableau = 1 plan de leçon Word détaillé<br>
-                        • Contenu: Objectifs, Méthodes, Étapes chronométrées, Différenciation<br>
-                        • Téléchargement automatique d'un fichier ZIP contenant tous les plans<br>
-                        • Temps estimé: 2-5 secondes par plan
-                    </p>
-                </div>
-                
-                <div style="background: #fff; border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                    <h4 style="margin-top: 0; color: #1F2937;">
-                        <i class="fas fa-cogs"></i> Mode de génération
-                    </h4>
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 12px; cursor: pointer; padding: 12px; border: 2px solid #ddd; border-radius: 8px; transition: all 0.3s;" onclick="selectGenerationMode('individual')" id="modeIndividualLabel">
-                            <input type="radio" name="generationMode" value="individual" id="modeIndividual" checked style="margin-right: 10px;">
-                            <strong><i class="fas fa-file"></i> Génération Individuelle</strong>
-                            <p style="margin: 8px 0 0 28px; font-size: 13px; color: #6B7280;">Chaque leçon = 1 fichier Word séparé</p>
-                        </label>
-                        <label style="display: block; cursor: pointer; padding: 12px; border: 2px solid #ddd; border-radius: 8px; transition: all 0.3s;" onclick="selectGenerationMode('byTeacher')" id="modeByTeacherLabel">
-                            <input type="radio" name="generationMode" value="byTeacher" id="modeByTeacher" style="margin-right: 10px;">
-                            <strong><i class="fas fa-user-tie"></i> Génération Groupée par Enseignant</strong>
-                            <p style="margin: 8px 0 0 28px; font-size: 13px; color: #6B7280;">Tous les plans d'un enseignant = 1 fichier Word</p>
-                        </label>
-                    </div>
-                </div>
-                
-                <div style="background: #fff; border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                    <h4 style="margin-top: 0; color: #1F2937;">
-                        <i class="fas fa-filter"></i> Utilisez les filtres pour sélectionner les données
-                    </h4>
-                    <p style="font-size: 14px; color: #6B7280; margin-bottom: 15px;">
-                        Les plans de leçon seront générés pour toutes les lignes actuellement affichées dans le tableau.
-                        Utilisez les filtres (Enseignant, Classe, Matière, etc.) pour affiner votre sélection.
-                    </p>
-                    <div style="background: #f9fafb; padding: 12px; border-radius: 6px; font-size: 15px; font-weight: 600; color: #1F2937; text-align: center;">
-                        <i class="fas fa-list"></i> 
-                        <span id="aiLessonPlanCount">0</span> ligne(s) sélectionnée(s)
-                    </div>
-                    <div id="teacherCountInfo" style="margin-top: 12px; padding: 12px; background: #e0f2fe; border-radius: 6px; font-size: 14px; color: #0369a1; text-align: center; display: none;">
-                        <i class="fas fa-users"></i> 
-                        <span id="teacherCount">0</span> enseignant(s) concerné(s)
-                    </div>
-                </div>
-                
-                <div style="text-align: center;">
-                    <button id="generateAILessonPlansBtn" onclick="startGenerateAILessonPlans()" class="action-button pro-button success-button" disabled style="padding: 12px 30px; font-size: 16px;">
-                        <i class="fas fa-robot"></i> <span class="btn-text">Générer Plans de Leçon IA</span>
-                    </button>
-                    <button onclick="closeAILessonPlanModal()" style="margin-left: 10px; padding: 12px 30px; font-size: 16px;">
-                        <i class="fas fa-times"></i> Annuler
-                    </button>
-                </div>
-            </div>
-        </div>
-        
+
         <!-- Modal avec checkboxes pour sélection classes/matières -->
         <div id="lessonPlanModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; overflow: auto;">
             <div style="background: white; margin: 50px auto; max-width: 800px; padding: 30px; border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.3);">
@@ -317,6 +243,9 @@
         <div class="table-actions-container">
             <button id="saveAllDisplayedBtn" onclick="saveAllDisplayedRows()" class="action-button save-all-button pro-button success-button" disabled>
                 <i class="fas fa-save"></i> <span class="btn-text">Enregistrer Lignes Affichées</span>
+            </button>
+            <button id="generateAllDisplayedPlansBtn" onclick="generateAllDisplayedLessonPlans()" class="action-button pro-button" disabled style="margin-left: 10px; background: #7C3AED;">
+                <i class="fas fa-file-word"></i> <span class="btn-text">Générer Plans de Leçon (Affichés)</span>
             </button>
         </div>
         <div class="table-responsive-wrapper">

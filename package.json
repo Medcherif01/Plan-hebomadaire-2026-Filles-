@@ -8,7 +8,7 @@
     "dev": "nodemon api/index.js"
   },
   "dependencies": {
-    "@google/generative-ai": "latest",
+
     "archiver": "^6.0.1",
     "cors": "^2.8.5",
     "docxtemplater": "^3.47.1",

@@ -1304,6 +1304,34 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
 
     console.log(`✅ [Multiple AI Lesson Plans] Génération de ${rowsData.length} plans pour semaine ${week}`);
 
+    // ⚡ FILTRER LES LIGNES AVEC LEÇONS VIDES AVANT DE COMMENCER
+    const validRows = [];
+    const skippedRows = [];
+    
+    for (let i = 0; i < rowsData.length; i++) {
+      const rowData = rowsData[i];
+      const lecon = rowData[findKey(rowData, 'Leçon')] || '';
+      const enseignant = rowData[findKey(rowData, 'Enseignant')] || '';
+      const classe = rowData[findKey(rowData, 'Classe')] || '';
+      const matiere = rowData[findKey(rowData, 'Matière')] || '';
+      
+      if (!lecon || lecon.trim() === '' || lecon.trim().length < 3) {
+        console.log(`⏭️  [${i+1}/${rowsData.length}] IGNORÉ (leçon vide): ${enseignant} | ${classe} | ${matiere}`);
+        skippedRows.push({ index: i+1, enseignant, classe, matiere, reason: 'Leçon vide' });
+      } else {
+        validRows.push({ index: i, rowData });
+      }
+    }
+    
+    console.log(`📊 [Multiple AI] ${validRows.length} lignes valides, ${skippedRows.length} ignorées`);
+    
+    if (validRows.length === 0) {
+      return res.status(400).json({ 
+        message: "Aucune ligne avec une leçon valide à générer.",
+        skipped: skippedRows
+      });
+    }
+
     // Charger le modèle Word une seule fois
     let templateBuffer;
     try {
@@ -1317,7 +1345,7 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
 
     // Configuration du ZIP
     const archive = archiver('zip', { zlib: { level: 9 } });
-    const filename = `Plans_Lecon_IA_S${week}_${rowsData.length}_fichiers.zip`;
+    const filename = `Plans_Lecon_IA_S${week}_${validRows.length}_fichiers.zip`;
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -1335,10 +1363,17 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
 
     let successCount = 0;
     let errorCount = 0;
+    
+    // Si des lignes ont été ignorées, ajouter un fichier récapitulatif
+    if (skippedRows.length > 0) {
+      const skipContent = `⏭️  LIGNES IGNORÉES (LEÇONS VIDES)\n\nTotal: ${skippedRows.length} ligne(s)\n\n` +
+        skippedRows.map(r => `${r.index}. ${r.enseignant} | ${r.classe} | ${r.matiere}\n   Raison: ${r.reason}`).join('\n\n');
+      archive.append(Buffer.from(skipContent, 'utf-8'), { name: '00_LIGNES_IGNOREES.txt' });
+    }
 
-    // Générer chaque plan de leçon
-    for (let i = 0; i < rowsData.length; i++) {
-      const rowData = rowsData[i];
+    // Générer chaque plan de leçon (uniquement les lignes valides)
+    for (let i = 0; i < validRows.length; i++) {
+      const { index: originalIndex, rowData } = validRows[i];
       
       try {
         // Extraire données
@@ -1352,12 +1387,13 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
         const travaux = rowData[findKey(rowData, 'Travaux de classe')] || 'Non spécifié';
         const devoirsPrevus = rowData[findKey(rowData, 'Devoirs')] || 'Non spécifié';
 
-        console.log(`📝 [${i+1}/${rowsData.length}] ${enseignant} | ${classe} | ${matiere}`);
+        console.log(`📝 [${i+1}/${validRows.length}] (Ligne originale #${originalIndex+1}) ${enseignant} | ${classe} | ${matiere}`);
         console.log(`  ├─ Leçon: "${lecon.substring(0, 50)}${lecon.length > 50 ? '...' : ''}"`);
         console.log(`  ├─ Travaux: "${travaux.substring(0, 30)}${travaux.length > 30 ? '...' : ''}"`);
         console.log(`  └─ Support: "${support.substring(0, 30)}${support.length > 30 ? '...' : ''}"`);
         
-        // Vérification: si la leçon est vide, on ne peut pas générer
+        // Note: Cette vérification n'est plus nécessaire car déjà filtrée au début
+        // Mais on la garde par sécurité
         if (!lecon || lecon.trim() === '') {
           throw new Error('⚠️ Leçon vide - impossible de générer un plan de leçon sans contenu de leçon');
         }
@@ -1408,11 +1444,18 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
           });
           
           if (!aiResponse.ok) {
-            throw new Error(`API GROQ error: ${aiResponse.status}`);
+            const errorBody = await aiResponse.json().catch(() => ({}));
+            console.error(`❌ [GROQ Error] Status ${aiResponse.status}:`, JSON.stringify(errorBody, null, 2));
+            throw new Error(`API GROQ error ${aiResponse.status}: ${errorBody.error?.message || JSON.stringify(errorBody)}`);
           }
           
           aiResult = await aiResponse.json();
           rawContent = aiResult?.choices?.[0]?.message?.content || "";
+          
+          if (!rawContent) {
+            console.error('❌ [GROQ] Réponse vide:', JSON.stringify(aiResult, null, 2));
+            throw new Error('GROQ a retourné une réponse vide');
+          }
         } else {
           // GEMINI API
           const API_URL = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
@@ -1425,21 +1468,46 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
           });
           
           if (!aiResponse.ok) {
-            throw new Error(`API GEMINI error: ${aiResponse.status}`);
+            const errorBody = await aiResponse.json().catch(() => ({}));
+            console.error(`❌ [GEMINI Error] Status ${aiResponse.status}:`, JSON.stringify(errorBody, null, 2));
+            
+            // Message spécifique pour quota dépassé
+            if (aiResponse.status === 429) {
+              throw new Error(`⚠️ QUOTA GEMINI DÉPASSÉ (429): ${errorBody.error?.message || 'Limite atteinte'}`);
+            }
+            
+            throw new Error(`API GEMINI error ${aiResponse.status}: ${errorBody.error?.message || JSON.stringify(errorBody)}`);
           }
           
           aiResult = await aiResponse.json();
           rawContent = aiResult?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          
+          if (!rawContent) {
+            console.error('❌ [GEMINI] Réponse vide:', JSON.stringify(aiResult, null, 2));
+            throw new Error('GEMINI a retourné une réponse vide');
+          }
         }
         
         // Parser JSON
         let jsonData;
         try {
           const cleanedJson = rawContent.replace(/```json\n?|```\n?/g, '').trim();
+          
+          if (!cleanedJson) {
+            throw new Error('Contenu JSON vide après nettoyage');
+          }
+          
           jsonData = JSON.parse(cleanedJson);
+          
+          // Vérifier que les champs essentiels sont présents
+          if (!jsonData.TitreUnite && !jsonData.Objectifs && !jsonData.etapes) {
+            throw new Error('Structure JSON invalide : champs essentiels manquants');
+          }
         } catch (parseError) {
-          console.error(`Erreur parsing JSON pour ${classe} ${matiere}:`, parseError);
-          throw new Error("Format JSON invalide de l'IA");
+          console.error(`❌ Erreur parsing JSON pour ${classe} ${matiere}:`);
+          console.error(`  - Message: ${parseError.message}`);
+          console.error(`  - Contenu brut (100 premiers chars): ${rawContent.substring(0, 100)}`);
+          throw new Error(`Format JSON invalide: ${parseError.message}`);
         }
 
         // Générer le document Word
@@ -1482,10 +1550,10 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
         archive.append(docBuffer, { name: docFilename });
         successCount++;
         
-        console.log(`✅ [${i+1}/${rowsData.length}] Généré: ${docFilename}`);
+        console.log(`✅ [${i+1}/${validRows.length}] Généré: ${docFilename}`);
 
         // Petit délai pour éviter de surcharger l'API
-        if (i < rowsData.length - 1) {
+        if (i < validRows.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
@@ -1506,28 +1574,105 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
         errorCount++;
         
         // Ajouter un fichier texte d'erreur DÉTAILLÉ dans le ZIP
-        const errorFilename = `ERREUR_${i+1}_${sanitizeForFilename(classe)}_${sanitizeForFilename(matiere)}.txt`;
-        const errorContent = `❌ ERREUR DE GÉNÉRATION
-        
-Ligne: ${i+1}/${rowsData.length}
-Classe: ${classe}
-Matière: ${matiere}
-Enseignant: ${enseignant}
-Leçon: ${lecon.substring(0, 200)}
+        const errorFilename = `ERREUR_${String(i+1).padStart(2, '0')}_${sanitizeForFilename(classe)}_${sanitizeForFilename(matiere)}.txt`;
+        const errorContent = `❌ ERREUR DE GÉNÉRATION - PLAN DE LEÇON IA
 
-Erreur: ${error.message}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Stack trace:
+📍 INFORMATIONS DE LA LIGNE
+  Ligne valide    : ${i+1}/${validRows.length}
+  Ligne originale : ${originalIndex+1}/${rowsData.length}
+  
+👤 ENSEIGNANT     : ${enseignant}
+📚 CLASSE         : ${classe}
+📖 MATIÈRE        : ${matiere}
+
+📝 LEÇON (premiers 300 caractères) :
+${lecon.substring(0, 300)}${lecon.length > 300 ? '...' : ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️  ERREUR DÉTECTÉE :
+${error.message}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 STACK TRACE COMPLET :
 ${error.stack}
 
-Données complètes:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 DONNÉES COMPLÈTES DE LA LIGNE :
 ${JSON.stringify(rowData, null, 2)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 SOLUTIONS POSSIBLES :
+1. Vérifier que la clé API (GROQ ou GEMINI) est valide
+2. Vérifier que le quota API n'est pas dépassé
+3. Vérifier que la leçon contient suffisamment d'information
+4. Réessayer la génération plus tard si c'est un problème de quota
+5. Contacter le support si l'erreur persiste
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Date: ${new Date().toISOString()}
+Provider IA: ${USE_GROQ ? 'GROQ (llama-3.3-70b-versatile)' : 'GEMINI'}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
-        archive.append(errorContent, { name: errorFilename });
+        archive.append(Buffer.from(errorContent, 'utf-8'), { name: errorFilename });
       }
     }
 
     console.log(`📊 [Multiple AI] Résultat: ${successCount} succès, ${errorCount} erreurs`);
+    
+    // Ajouter un fichier récapitulatif final
+    const summaryContent = `📊 RÉCAPITULATIF DE GÉNÉRATION - PLANS DE LEÇON IA
+    
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📅 Date de génération : ${new Date().toLocaleString('fr-FR')}
+📦 Semaine            : ${week}
+🔧 Provider IA        : ${USE_GROQ ? 'GROQ (llama-3.3-70b-versatile)' : 'GEMINI (' + (MODEL_NAME || 'N/A') + ')'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📈 STATISTIQUES :
+  Lignes totales reçues  : ${rowsData.length}
+  Lignes valides         : ${validRows.length}
+  Lignes ignorées        : ${skippedRows.length} (leçons vides)
+  
+  ✅ Succès              : ${successCount}
+  ❌ Erreurs             : ${errorCount}
+  
+  📊 Taux de réussite    : ${validRows.length > 0 ? Math.round((successCount / validRows.length) * 100) : 0}%
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${errorCount > 0 ? `⚠️  ATTENTION : ${errorCount} erreur(s) détectée(s)
+Consultez les fichiers ERREUR_XX_*.txt pour plus de détails.
+
+💡 CAUSES POSSIBLES DES ERREURS :
+- Quota API dépassé (429)
+- Problème de connexion réseau
+- Format de réponse invalide de l'IA
+- Données de leçon insuffisantes
+
+🔑 SOLUTION : Configurer GROQ_API_KEY sur Vercel
+GROQ offre un quota gratuit plus généreux que GEMINI.
+Instructions : Voir README.md du projet
+` : '🎉 Toutes les générations ont réussi !'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📁 CONTENU DU ZIP :
+${skippedRows.length > 0 ? `  - 00_LIGNES_IGNOREES.txt (${skippedRows.length} lignes)\n` : ''}  - ${successCount} fichier(s) .docx (plans générés)
+${errorCount > 0 ? `  - ${errorCount} fichier(s) ERREUR_*.txt (détails des erreurs)\n` : ''}  - 99_RECAPITULATIF.txt (ce fichier)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Généré par le système de gestion des plans hebdomadaires
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+    archive.append(Buffer.from(summaryContent, 'utf-8'), { name: '99_RECAPITULATIF.txt' });
     
     archive.finalize();
 

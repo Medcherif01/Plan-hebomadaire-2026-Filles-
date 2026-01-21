@@ -978,11 +978,18 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
   try {
     console.log('📝 [AI Lesson Plan] Nouvelle demande de génération');
     
+    // Support GROQ API (prioritaire) avec fallback vers GEMINI
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    if (!GEMINI_API_KEY) {
-      console.error('❌ [AI Lesson Plan] Clé API GEMINI manquante');
-      return res.status(503).json({ message: "Le service IA n'est pas initialisé. Vérifiez la clé API GEMINI du serveur." });
+    const USE_GROQ = GROQ_API_KEY ? true : false;
+    
+    if (!GROQ_API_KEY && !GEMINI_API_KEY) {
+      console.error('❌ [AI Lesson Plan] Aucune clé API (GROQ ou GEMINI) disponible');
+      return res.status(503).json({ message: "Le service IA n'est pas initialisé. Vérifiez les clés API GROQ ou GEMINI du serveur." });
     }
+    
+    console.log(`🔧 [AI Lesson Plan] Provider IA: ${USE_GROQ ? 'GROQ (llama-3.3-70b)' : 'GEMINI'}`);
+    const AI_API_KEY = USE_GROQ ? GROQ_API_KEY : GEMINI_API_KEY;
 
     const lessonTemplateUrl = process.env.LESSON_TEMPLATE_URL || LESSON_TEMPLATE_URL;
     if (!lessonTemplateUrl) {
@@ -1077,52 +1084,84 @@ Utilise la structure JSON suivante (valeurs concrètes et professionnelles ; cl�
 ${jsonStructure}`;
     }
 
-    // === Résolution dynamique du modèle compatible v1 ===
-    console.log('🤖 [AI Lesson Plan] Résolution du modèle Gemini...');
-    const MODEL_NAME = await resolveGeminiModel(GEMINI_API_KEY);
-    console.log(`🤖 [AI Lesson Plan] Modèle sélectionné: ${MODEL_NAME}`);
+    // === Configuration de l'API selon le provider ===
+    let API_URL, requestBody, aiResponse;
     
-    const API_URL = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
-
-    const requestBody = {
-      contents: [
-        { role: "user", parts: [{ text: prompt }] }
-      ]
-      // Pas de generationConfig pour éviter les 400 sur certains déploiements
-    };
-
-    console.log('🔄 [AI Lesson Plan] Appel à l\'API Gemini...');
-    const aiResponse = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    });
+    if (USE_GROQ) {
+      // GROQ API (quota plus généreux)
+      console.log('🤖 [AI Lesson Plan] Utilisation de GROQ API avec llama-3.3-70b-versatile');
+      API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+      requestBody = {
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 2048
+      };
+      
+      console.log('🔄 [AI Lesson Plan] Appel à l\'API GROQ...');
+      aiResponse = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_API_KEY}`
+        },
+        body: JSON.stringify(requestBody),
+      });
+    } else {
+      // GEMINI API (fallback)
+      console.log('🤖 [AI Lesson Plan] Résolution du modèle Gemini...');
+      const MODEL_NAME = await resolveGeminiModel(GEMINI_API_KEY);
+      console.log(`🤖 [AI Lesson Plan] Modèle sélectionné: ${MODEL_NAME}`);
+      
+      API_URL = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
+      requestBody = {
+        contents: [
+          { role: "user", parts: [{ text: prompt }] }
+        ]
+      };
+      
+      console.log('🔄 [AI Lesson Plan] Appel à l\'API Gemini...');
+      aiResponse = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+    }
 
     if (!aiResponse.ok) {
       const errorBody = await aiResponse.json().catch(() => ({}));
-      console.error("❌ [AI Lesson Plan] Erreur de l'API Google AI:", JSON.stringify(errorBody, null, 2));
+      console.error(`❌ [AI Lesson Plan] Erreur de l'API ${USE_GROQ ? 'GROQ' : 'GEMINI'}:`, JSON.stringify(errorBody, null, 2));
       
       // Message spécifique pour quota dépassé
       if (aiResponse.status === 429) {
-        throw new Error(`⚠️ QUOTA API GEMINI DÉPASSÉ : Limite gratuite atteinte (20 requêtes/jour). Veuillez réessayer demain ou upgrader votre compte Google AI. Détails : ${errorBody.error?.message || 'Quota dépassé'}`);
+        const provider = USE_GROQ ? 'GROQ' : 'GEMINI';
+        throw new Error(`⚠️ QUOTA API ${provider} DÉPASSÉ : Limite gratuite atteinte. Veuillez réessayer plus tard. Détails : ${errorBody.error?.message || 'Quota dépassé'}`);
       }
       
       throw new Error(`[${aiResponse.status} ${aiResponse.statusText}] ${errorBody.error?.message || "Erreur inconnue de l'API."}`);
     }
     
-    console.log('✅ [AI Lesson Plan] Réponse reçue de Gemini');
+    console.log(`✅ [AI Lesson Plan] Réponse reçue de ${USE_GROQ ? 'GROQ' : 'GEMINI'}`);
 
     const aiResult = await aiResponse.json();
 
     // Extraction robuste du texte JSON renvoyé
     let text = "";
     try {
-      text = aiResult?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-      if (!text && Array.isArray(aiResult?.candidates?.[0]?.content?.parts)) {
-        text = aiResult.candidates[0].content.parts.map(p => p.text || "").join("").trim();
-      }
-      if (!text && aiResult?.candidates?.[0]?.output_text) {
-        text = String(aiResult.candidates[0].output_text).trim();
+      if (USE_GROQ) {
+        // Format GROQ (OpenAI-compatible)
+        text = aiResult?.choices?.[0]?.message?.content?.trim();
+      } else {
+        // Format GEMINI
+        text = aiResult?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (!text && Array.isArray(aiResult?.candidates?.[0]?.content?.parts)) {
+          text = aiResult.candidates[0].content.parts.map(p => p.text || "").join("").trim();
+        }
+        if (!text && aiResult?.candidates?.[0]?.output_text) {
+          text = String(aiResult.candidates[0].output_text).trim();
+        }
       }
     } catch (_) {}
 
@@ -1242,10 +1281,16 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
   try {
     console.log('📚 [Multiple AI Lesson Plans] Nouvelle demande de génération multiple');
     
+    // Support GROQ API (prioritaire) avec fallback vers GEMINI
+    const GROQ_API_KEY = process.env.GROQ_API_KEY;
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    if (!GEMINI_API_KEY) {
-      return res.status(503).json({ message: "Le service IA n'est pas initialisé." });
+    const USE_GROQ = GROQ_API_KEY ? true : false;
+    
+    if (!GROQ_API_KEY && !GEMINI_API_KEY) {
+      return res.status(503).json({ message: "Le service IA n'est pas initialisé. Vérifiez les clés API GROQ ou GEMINI." });
     }
+    
+    console.log(`🔧 [Multiple AI] Provider IA: ${USE_GROQ ? 'GROQ (llama-3.3-70b)' : 'GEMINI'}`);
 
     const lessonTemplateUrl = process.env.LESSON_TEMPLATE_URL || LESSON_TEMPLATE_URL;
     if (!lessonTemplateUrl) {
@@ -1281,9 +1326,12 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
     const weekNumber = Number(week);
     const datesNode = specificWeekDateRangesNode[weekNumber];
 
-    // Résoudre le modèle Gemini une seule fois
-    const MODEL_NAME = await resolveGeminiModel(GEMINI_API_KEY);
-    console.log(`🤖 [Multiple AI] Modèle Gemini: ${MODEL_NAME}`);
+    // Résoudre le modèle selon le provider
+    let MODEL_NAME;
+    if (!USE_GROQ) {
+      MODEL_NAME = await resolveGeminiModel(GEMINI_API_KEY);
+      console.log(`🤖 [Multiple AI] Modèle GEMINI: ${MODEL_NAME}`);
+    }
 
     let successCount = 0;
     let errorCount = 0;
@@ -1339,22 +1387,50 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
           prompt = `Renvoie UNIQUEMENT du JSON valide. Pas de markdown, pas de blocs de code, pas de commentaire.\n\nEn tant qu'assistant pédagogique expert, crée un plan de leçon détaillé de 45 minutes en français. Structure en phases chronométrées et intègre les notes de l'enseignant :\n- Matière : ${matiere}, Classe : ${classe}, Thème : ${lecon}\n- Travaux de classe : ${travaux}\n- Support/Matériel : ${support}\n- Devoirs prévus : ${devoirsPrevus}\n\nUtilise la structure JSON suivante (valeurs concrètes et professionnelles ; clés strictement identiques) :\n${jsonStructure}`;
         }
 
-        // Appel API Gemini
-        const API_URL = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
-        const aiResponse = await fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: prompt }] }]
-          })
-        });
-
-        if (!aiResponse.ok) {
-          throw new Error(`API Gemini error: ${aiResponse.status}`);
+        // Appel API selon le provider
+        let aiResponse, aiResult, rawContent;
+        
+        if (USE_GROQ) {
+          // GROQ API
+          const API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+          aiResponse = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${GROQ_API_KEY}`
+            },
+            body: JSON.stringify({
+              model: 'llama-3.3-70b-versatile',
+              messages: [{ role: 'user', content: prompt }],
+              temperature: 0.7,
+              max_tokens: 2048
+            })
+          });
+          
+          if (!aiResponse.ok) {
+            throw new Error(`API GROQ error: ${aiResponse.status}`);
+          }
+          
+          aiResult = await aiResponse.json();
+          rawContent = aiResult?.choices?.[0]?.message?.content || "";
+        } else {
+          // GEMINI API
+          const API_URL = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
+          aiResponse = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts: [{ text: prompt }] }]
+            })
+          });
+          
+          if (!aiResponse.ok) {
+            throw new Error(`API GEMINI error: ${aiResponse.status}`);
+          }
+          
+          aiResult = await aiResponse.json();
+          rawContent = aiResult?.candidates?.[0]?.content?.parts?.[0]?.text || "";
         }
-
-        const aiResult = await aiResponse.json();
-        const rawContent = aiResult?.candidates?.[0]?.content?.parts?.[0]?.text || "";
         
         // Parser JSON
         let jsonData;

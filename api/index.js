@@ -1423,68 +1423,109 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
           prompt = `Renvoie UNIQUEMENT du JSON valide. Pas de markdown, pas de blocs de code, pas de commentaire.\n\nEn tant qu'assistant pédagogique expert, crée un plan de leçon détaillé de 45 minutes en français. Structure en phases chronométrées et intègre les notes de l'enseignant :\n- Matière : ${matiere}, Classe : ${classe}, Thème : ${lecon}\n- Travaux de classe : ${travaux}\n- Support/Matériel : ${support}\n- Devoirs prévus : ${devoirsPrevus}\n\nUtilise la structure JSON suivante (valeurs concrètes et professionnelles ; clés strictement identiques) :\n${jsonStructure}`;
         }
 
-        // Appel API selon le provider
+        // Appel API selon le provider avec RETRY automatique
         let aiResponse, aiResult, rawContent;
+        let retryCount = 0;
+        const MAX_RETRIES = 3;
         
-        if (USE_GROQ) {
-          // GROQ API
-          const API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-          aiResponse = await fetch(API_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${GROQ_API_KEY}`
-            },
-            body: JSON.stringify({
-              model: 'llama-3.3-70b-versatile',
-              messages: [{ role: 'user', content: prompt }],
-              temperature: 0.7,
-              max_tokens: 2048
-            })
-          });
-          
-          if (!aiResponse.ok) {
-            const errorBody = await aiResponse.json().catch(() => ({}));
-            console.error(`❌ [GROQ Error] Status ${aiResponse.status}:`, JSON.stringify(errorBody, null, 2));
-            throw new Error(`API GROQ error ${aiResponse.status}: ${errorBody.error?.message || JSON.stringify(errorBody)}`);
-          }
-          
-          aiResult = await aiResponse.json();
-          rawContent = aiResult?.choices?.[0]?.message?.content || "";
-          
-          if (!rawContent) {
-            console.error('❌ [GROQ] Réponse vide:', JSON.stringify(aiResult, null, 2));
-            throw new Error('GROQ a retourné une réponse vide');
-          }
-        } else {
-          // GEMINI API
-          const API_URL = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
-          aiResponse = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ text: prompt }] }]
-            })
-          });
-          
-          if (!aiResponse.ok) {
-            const errorBody = await aiResponse.json().catch(() => ({}));
-            console.error(`❌ [GEMINI Error] Status ${aiResponse.status}:`, JSON.stringify(errorBody, null, 2));
-            
-            // Message spécifique pour quota dépassé
-            if (aiResponse.status === 429) {
-              throw new Error(`⚠️ QUOTA GEMINI DÉPASSÉ (429): ${errorBody.error?.message || 'Limite atteinte'}`);
+        while (retryCount <= MAX_RETRIES) {
+          try {
+            if (USE_GROQ) {
+              // GROQ API
+              const API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+              aiResponse = await fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${GROQ_API_KEY}`
+                },
+                body: JSON.stringify({
+                  model: 'llama-3.3-70b-versatile',
+                  messages: [{ role: 'user', content: prompt }],
+                  temperature: 0.7,
+                  max_tokens: 2048
+                })
+              });
+              
+              if (!aiResponse.ok) {
+                const errorBody = await aiResponse.json().catch(() => ({}));
+                
+                // Si erreur 429 (rate limit), on réessaye après un délai
+                if (aiResponse.status === 429 && retryCount < MAX_RETRIES) {
+                  const waitTime = Math.pow(2, retryCount) * 5000; // 5s, 10s, 20s
+                  console.log(`⏳ [GROQ] Rate limit atteint, attente ${waitTime/1000}s avant retry ${retryCount+1}/${MAX_RETRIES}`);
+                  await new Promise(resolve => setTimeout(resolve, waitTime));
+                  retryCount++;
+                  continue; // Réessayer
+                }
+                
+                console.error(`❌ [GROQ Error] Status ${aiResponse.status}:`, JSON.stringify(errorBody, null, 2));
+                throw new Error(`API GROQ error ${aiResponse.status}: ${errorBody.error?.message || JSON.stringify(errorBody)}`);
+              }
+              
+              aiResult = await aiResponse.json();
+              rawContent = aiResult?.choices?.[0]?.message?.content || "";
+              
+              if (!rawContent) {
+                console.error('❌ [GROQ] Réponse vide:', JSON.stringify(aiResult, null, 2));
+                throw new Error('GROQ a retourné une réponse vide');
+              }
+              
+              break; // Succès, sortir de la boucle retry
+              
+            } else {
+              // GEMINI API
+              const API_URL = `https://generativelanguage.googleapis.com/v1/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`;
+              aiResponse = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{ role: "user", parts: [{ text: prompt }] }]
+                })
+              });
+              
+              if (!aiResponse.ok) {
+                const errorBody = await aiResponse.json().catch(() => ({}));
+                
+                // Si erreur 429 (rate limit), on réessaye après un délai
+                if (aiResponse.status === 429 && retryCount < MAX_RETRIES) {
+                  const waitTime = Math.pow(2, retryCount) * 5000; // 5s, 10s, 20s
+                  console.log(`⏳ [GEMINI] Quota dépassé, attente ${waitTime/1000}s avant retry ${retryCount+1}/${MAX_RETRIES}`);
+                  await new Promise(resolve => setTimeout(resolve, waitTime));
+                  retryCount++;
+                  continue; // Réessayer
+                }
+                
+                console.error(`❌ [GEMINI Error] Status ${aiResponse.status}:`, JSON.stringify(errorBody, null, 2));
+                
+                // Message spécifique pour quota dépassé
+                if (aiResponse.status === 429) {
+                  throw new Error(`⚠️ QUOTA GEMINI DÉPASSÉ (429): ${errorBody.error?.message || 'Limite atteinte'}`);
+                }
+                
+                throw new Error(`API GEMINI error ${aiResponse.status}: ${errorBody.error?.message || JSON.stringify(errorBody)}`);
+              }
+              
+              aiResult = await aiResponse.json();
+              rawContent = aiResult?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+              
+              if (!rawContent) {
+                console.error('❌ [GEMINI] Réponse vide:', JSON.stringify(aiResult, null, 2));
+                throw new Error('GEMINI a retourné une réponse vide');
+              }
+              
+              break; // Succès, sortir de la boucle retry
             }
-            
-            throw new Error(`API GEMINI error ${aiResponse.status}: ${errorBody.error?.message || JSON.stringify(errorBody)}`);
-          }
-          
-          aiResult = await aiResponse.json();
-          rawContent = aiResult?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          
-          if (!rawContent) {
-            console.error('❌ [GEMINI] Réponse vide:', JSON.stringify(aiResult, null, 2));
-            throw new Error('GEMINI a retourné une réponse vide');
+          } catch (fetchError) {
+            // Si erreur réseau, réessayer
+            if (retryCount < MAX_RETRIES) {
+              const waitTime = Math.pow(2, retryCount) * 3000; // 3s, 6s, 12s
+              console.log(`⏳ Erreur réseau, attente ${waitTime/1000}s avant retry ${retryCount+1}/${MAX_RETRIES}`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+              retryCount++;
+              continue;
+            }
+            throw fetchError; // Après 3 essais, lancer l'erreur
           }
         }
         
@@ -1552,9 +1593,15 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
         
         console.log(`✅ [${i+1}/${validRows.length}] Généré: ${docFilename}`);
 
-        // Petit délai pour éviter de surcharger l'API
+        // Délai adaptatif pour éviter rate limit
         if (i < validRows.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          // Délai progressif : 3s pour les premières, 5s après 10, 8s après 20
+          let delay = 3000; // 3 secondes par défaut
+          if (i >= 20) delay = 8000; // 8 secondes après 20 générations
+          else if (i >= 10) delay = 5000; // 5 secondes après 10 générations
+          
+          console.log(`⏳ Pause de ${delay/1000}s avant la prochaine génération...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
 
       } catch (error) {

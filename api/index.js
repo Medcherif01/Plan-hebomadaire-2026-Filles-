@@ -1,4 +1,4 @@
-// api/index.js — v1, sélection dynamique du modèle, sortie JSON via prompt (sans generationConfig)
+// api/index.js — v2, base de données migrée de MongoDB vers Supabase (MCP)
 
 const express = require('express');
 const cors = require('cors');
@@ -7,7 +7,7 @@ const XLSX = require('xlsx');
 const PizZip = require('pizzip');
 const Docxtemplater = require('docxtemplater');
 const fetch = require('node-fetch');
-const { MongoClient } = require('mongodb');
+const { createClient } = require('@supabase/supabase-js');
 const archiver = require('archiver');
 const webpush = require('web-push');
 
@@ -65,9 +65,39 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(fileUpload());
 
-const MONGO_URL = process.env.MONGO_URL;
 const WORD_TEMPLATE_URL = process.env.WORD_TEMPLATE_URL;
 const LESSON_TEMPLATE_URL = process.env.LESSON_TEMPLATE_URL;
+
+// ========================================================================
+// ====================== CONNEXION SUPABASE (MCP) ========================
+// ========================================================================
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+let supabaseClient = null;
+
+function getSupabase() {
+  if (supabaseClient) return supabaseClient;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Variables d\'environnement SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY manquantes.');
+  }
+  supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false }
+  });
+  console.log('✅ Client Supabase initialisé');
+  return supabaseClient;
+}
+
+// Helper : lancer une erreur si Supabase retourne une erreur
+function checkSupabaseError(error, context) {
+  if (error) {
+    console.error(`❌ Erreur Supabase [${context}]:`, error);
+    throw new Error(`Supabase error [${context}]: ${error.message}`);
+  }
+}
+
+// ========================================================================
 
 // Configuration Web Push (VAPID)
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BDuAoL4lagqZmYl4BPdCFYBwRhoqGMrcWUFAbF1pMBWq2e0JOV6fL_WitURlXXhXTROGB2vYpnvgSDZfAoZq0Jo';
@@ -103,16 +133,6 @@ const validUsers = {
   "Hana": "Hana", "Samira": "Samira", "Tayba": "Tayba", "Shanoja": "Shanoja",
   "Sara": "Sara", "Souha": "Souha", "Inas": "Inas"
 };
-
-let cachedDb = null;
-async function connectToDatabase() {
-  if (cachedDb) return cachedDb;
-  const client = new MongoClient(MONGO_URL);
-  await client.connect();
-  const db = client.db();
-  cachedDb = db;
-  return db;
-}
 
 function formatDateFrenchNode(date) {
   if (!date || isNaN(date.getTime())) return "Date invalide";
@@ -215,7 +235,7 @@ async function resolveGeminiModel(apiKey) {
   throw new Error("Aucun modèle compatible v1 trouvé pour votre clé (generateContent). Vérifiez l'accès de la clé et l'API activée.");
 }
 
-// ------------------------- Web Push Subscriptions -------------------------
+// ------------------------- Web Push Subscriptions (/api/subscribe) -------------------------
 
 app.post('/api/subscribe', async (req, res) => {
   try {
@@ -225,17 +245,21 @@ app.post('/api/subscribe', async (req, res) => {
       return res.status(400).json({ message: 'Subscription et username requis.' });
     }
 
-    const db = await connectToDatabase();
-    // Utiliser l'endpoint comme _id pour garantir l'unicité de l'abonnement
-    await db.collection('subscriptions').updateOne(
-      { _id: subscription.endpoint },
-      { $set: { subscription: subscription, username: username, createdAt: new Date() } },
-      { upsert: true }
-    );
+    const supabase = getSupabase();
+    // Upsert: utiliser l'endpoint comme identifiant unique
+    const { error } = await supabase
+      .from('subscriptions')
+      .upsert({
+        id: subscription.endpoint,
+        subscription: subscription,
+        username: username,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+    checkSupabaseError(error, 'subscribe upsert');
 
     res.status(201).json({ message: 'Abonnement enregistré.' });
   } catch (error) {
-    console.error('Erreur MongoDB /subscribe:', error);
+    console.error('Erreur Supabase /subscribe:', error);
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 });
@@ -247,12 +271,16 @@ app.post('/api/unsubscribe', async (req, res) => {
       return res.status(400).json({ message: 'Endpoint requis.' });
     }
 
-    const db = await connectToDatabase();
-    await db.collection('subscriptions').deleteOne({ _id: endpoint });
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from('subscriptions')
+      .delete()
+      .eq('id', endpoint);
+    checkSupabaseError(error, 'unsubscribe delete');
 
     res.status(200).json({ message: 'Abonnement supprimé.' });
   } catch (error) {
-    console.error('Erreur MongoDB /unsubscribe:', error);
+    console.error('Erreur Supabase /unsubscribe:', error);
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 });
@@ -262,21 +290,19 @@ app.post('/api/unsubscribe', async (req, res) => {
 // Fonction utilitaire pour déterminer la semaine actuelle
 function getCurrentWeekNumber() {
   const today = new Date();
-  today.setUTCHours(0, 0, 0, 0); // Utiliser UTC pour la comparaison avec les dates stockées
+  today.setUTCHours(0, 0, 0, 0);
 
   for (const week in specificWeekDateRangesNode) {
     const dates = specificWeekDateRangesNode[week];
     const startDate = new Date(dates.start + 'T00:00:00Z');
     const endDate = new Date(dates.end + 'T00:00:00Z');
-
-    // Ajouter un jour à la date de fin pour inclure le dernier jour
     endDate.setUTCDate(endDate.getUTCDate() + 1);
 
     if (today >= startDate && today <= endDate) {
       return parseInt(week, 10);
     }
   }
-  return null; // Semaine non trouvée
+  return null;
 }
 
 app.get('/api/send-reminders', async (req, res) => {
@@ -287,25 +313,30 @@ app.get('/api/send-reminders', async (req, res) => {
       return res.status(200).json({ message: 'Semaine actuelle non définie.' });
     }
 
-    const db = await connectToDatabase();
-    const planDocument = await db.collection('plans').findOne({ week: weekNumber });
+    const supabase = getSupabase();
 
-    if (!planDocument || !planDocument.data || planDocument.data.length === 0) {
+    // Récupérer le plan de la semaine
+    const { data: planRows, error: planError } = await supabase
+      .from('plans')
+      .select('data')
+      .eq('week', weekNumber)
+      .maybeSingle();
+    checkSupabaseError(planError, 'send-reminders plans select');
+
+    if (!planRows || !planRows.data || planRows.data.length === 0) {
       console.log(`⚠️ Aucun plan trouvé pour la semaine ${weekNumber}.`);
       return res.status(200).json({ message: `Aucun plan trouvé pour la semaine ${weekNumber}.` });
     }
 
-    // 1. Identifier les enseignants avec au moins une leçon vide
+    // Identifier les enseignants avec au moins une leçon vide
     const teachersToRemind = new Set();
-    const leconKey = findKey(planDocument.data[0] || {}, 'Leçon');
+    const leconKey = findKey(planRows.data[0] || {}, 'Leçon');
 
     if (leconKey) {
-      planDocument.data.forEach(row => {
+      planRows.data.forEach(row => {
         const enseignantKey = findKey(row, 'Enseignant');
         const enseignant = enseignantKey ? row[enseignantKey] : null;
         const lecon = row[leconKey];
-
-        // Si l'enseignant est valide et la leçon est vide ou non définie
         if (enseignant && (!lecon || lecon.trim() === '')) {
           teachersToRemind.add(enseignant);
         }
@@ -319,25 +350,24 @@ app.get('/api/send-reminders', async (req, res) => {
 
     console.log(`🔔 Enseignants à rappeler pour S${weekNumber}:`, Array.from(teachersToRemind));
 
-    // 2. Récupérer les abonnements pour ces enseignants
-    const subscriptions = await db.collection('subscriptions').find({
-      username: { $in: Array.from(teachersToRemind) }
-    }).toArray();
+    // Récupérer les abonnements pour ces enseignants
+    const { data: subscriptions, error: subError } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .in('username', Array.from(teachersToRemind));
+    checkSupabaseError(subError, 'send-reminders subscriptions select');
 
-    if (subscriptions.length === 0) {
+    if (!subscriptions || subscriptions.length === 0) {
       console.log('⚠️ Aucun abonnement push trouvé pour les enseignants à rappeler.');
       return res.status(200).json({ message: 'Aucun abonnement push trouvé.' });
     }
 
-    // 3. Envoyer les notifications
+    // Envoyer les notifications
     const notificationPayload = JSON.stringify({
       title: 'Rappel Plan Hebdomadaire',
       body: `Veuillez compléter votre plan de leçon pour la semaine ${weekNumber}.`,
-      icon: '/icons/icon-192x192.png', // Assurez-vous que cette icône existe
-      data: {
-        url: '/', // URL à ouvrir lors du clic sur la notification
-        week: weekNumber
-      }
+      icon: '/icons/icon-192x192.png',
+      data: { url: '/', week: weekNumber }
     });
 
     const sendPromises = subscriptions.map(sub => {
@@ -345,9 +375,8 @@ app.get('/api/send-reminders', async (req, res) => {
         .then(() => console.log(`Notification envoyée à ${sub.username}`))
         .catch(async (error) => {
           console.error(`Échec envoi notification à ${sub.username}:`, error);
-          // Supprimer l'abonnement si l'erreur est 410 Gone (abonnement expiré)
           if (error.statusCode === 410) {
-            await db.collection('subscriptions').deleteOne({ _id: sub.subscription.endpoint });
+            await supabase.from('subscriptions').delete().eq('id', sub.id);
             console.log(`Abonnement expiré pour ${sub.username} supprimé.`);
           }
         });
@@ -373,8 +402,8 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    mongoConfigured: !!MONGO_URL,
-    geminiConfigured: !!GEMINI_API_KEY
+    supabaseConfigured: !!(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY),
+    geminiConfigured: !!process.env.GEMINI_API_KEY
   });
 });
 
@@ -406,37 +435,46 @@ app.get('/api/plans/:week', async (req, res) => {
   const weekNumber = parseInt(req.params.week, 10);
   if (isNaN(weekNumber)) return res.status(400).json({ message: 'Semaine invalide.' });
   try {
-    const db = await connectToDatabase();
-    const planDocument = await db.collection('plans').findOne({ week: weekNumber });
-    
-    if (planDocument) {
-      // Récupérer tous les plans de leçon disponibles pour cette semaine
-      const lessonPlans = await db.collection('lessonPlans')
-        .find({ week: weekNumber }, { projection: { _id: 1 } })
-        .toArray();
-      
-      // Créer un Set des IDs disponibles pour recherche rapide
-      const availableLessonPlanIds = new Set(lessonPlans.map(lp => lp._id));
-      
-      // NEW LOGIC: Check for available weekly DOCX plans
-      const weeklyPlans = await db.collection('weeklyLessonPlans')
-        .find({ week: weekNumber }, { projection: { classe: 1 } })
-        .toArray();
-      
-      const availableWeeklyPlans = weeklyPlans.map(p => p.classe); // Array of class names
-      
-      // Enrichir les données avec lessonPlanId si disponible
+    const supabase = getSupabase();
+
+    // Récupérer le plan principal
+    const { data: planRow, error: planError } = await supabase
+      .from('plans')
+      .select('data, class_notes')
+      .eq('week', weekNumber)
+      .maybeSingle();
+    checkSupabaseError(planError, 'plans select');
+
+    if (planRow) {
+      // Récupérer les IDs des plans de leçon disponibles pour cette semaine
+      const { data: lessonPlansRows, error: lpError } = await supabase
+        .from('lesson_plans')
+        .select('id')
+        .eq('week', weekNumber);
+      checkSupabaseError(lpError, 'lesson_plans ids select');
+
+      const availableLessonPlanIds = new Set((lessonPlansRows || []).map(lp => lp.id));
+
+      // Récupérer les plans Word hebdomadaires disponibles
+      const { data: weeklyPlansRows, error: wpError } = await supabase
+        .from('weekly_lesson_plans')
+        .select('classe')
+        .eq('week', weekNumber);
+      checkSupabaseError(wpError, 'weekly_lesson_plans classe select');
+
+      const availableWeeklyPlans = (weeklyPlansRows || []).map(p => p.classe);
+
       console.log(`📋 Plans disponibles pour S${weekNumber}:`, Array.from(availableLessonPlanIds));
-      
-      const enrichedData = (planDocument.data || []).map(row => {
+
+      const enrichedData = (planRow.data || []).map(row => {
         const enseignant = row[findKey(row, 'Enseignant')] || '';
         const classe = row[findKey(row, 'Classe')] || '';
         const matiere = row[findKey(row, 'Matière')] || '';
         const periode = row[findKey(row, 'Période')] || '';
         const jour = row[findKey(row, 'Jour')] || '';
-        
+
         const potentialLessonPlanId = `${weekNumber}_${enseignant}_${classe}_${matiere}_${periode}_${jour}`.replace(/\s+/g, '_');
-        
+
         if (availableLessonPlanIds.has(potentialLessonPlanId)) {
           console.log(`✅ lessonPlanId trouvé: ${potentialLessonPlanId}`);
           return { ...row, lessonPlanId: potentialLessonPlanId };
@@ -445,17 +483,17 @@ app.get('/api/plans/:week', async (req, res) => {
         }
         return row;
       });
-      
+
       res.status(200).json({ 
-          planData: enrichedData, 
-          classNotes: planDocument.classNotes || {},
-          availableWeeklyPlans: availableWeeklyPlans // NEW FIELD
+        planData: enrichedData, 
+        classNotes: planRow.class_notes || {},
+        availableWeeklyPlans: availableWeeklyPlans
       });
     } else {
-      res.status(200).json({ planData: [], classNotes: {}, availableWeeklyPlans: [] }); // NEW FIELD
+      res.status(200).json({ planData: [], classNotes: {}, availableWeeklyPlans: [] });
     }
   } catch (error) {
-    console.error('Erreur MongoDB /plans/:week:', error);
+    console.error('Erreur Supabase /plans/:week:', error);
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 });
@@ -465,15 +503,15 @@ app.post('/api/save-plan', async (req, res) => {
   const data = req.body.data;
   if (isNaN(weekNumber) || !Array.isArray(data)) return res.status(400).json({ message: 'Données invalides.' });
   try {
-    const db = await connectToDatabase();
-    await db.collection('plans').updateOne(
-      { week: weekNumber },
-      { $set: { data: data } },
-      { upsert: true }
-    );
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from('plans')
+      .upsert({ week: weekNumber, data: data, updated_at: new Date().toISOString() }, { onConflict: 'week' });
+    checkSupabaseError(error, 'save-plan upsert');
+
     res.status(200).json({ message: `Plan S${weekNumber} enregistré.` });
   } catch (error) {
-    console.error('Erreur MongoDB /save-plan:', error);
+    console.error('Erreur Supabase /save-plan:', error);
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 });
@@ -483,15 +521,27 @@ app.post('/api/save-notes', async (req, res) => {
   const { classe, notes } = req.body;
   if (isNaN(weekNumber) || !classe) return res.status(400).json({ message: 'Données invalides.' });
   try {
-    const db = await connectToDatabase();
-    await db.collection('plans').updateOne(
-      { week: weekNumber },
-      { $set: { [`classNotes.${classe}`]: notes } },
-      { upsert: true }
-    );
+    const supabase = getSupabase();
+
+    // Récupérer les notes actuelles
+    const { data: existing, error: selectError } = await supabase
+      .from('plans')
+      .select('class_notes')
+      .eq('week', weekNumber)
+      .maybeSingle();
+    checkSupabaseError(selectError, 'save-notes select');
+
+    const currentNotes = (existing && existing.class_notes) ? existing.class_notes : {};
+    currentNotes[classe] = notes;
+
+    const { error } = await supabase
+      .from('plans')
+      .upsert({ week: weekNumber, class_notes: currentNotes, updated_at: new Date().toISOString() }, { onConflict: 'week' });
+    checkSupabaseError(error, 'save-notes upsert');
+
     res.status(200).json({ message: 'Notes enregistrées.' });
   } catch (error) {
-    console.error('Erreur MongoDB /save-notes:', error);
+    console.error('Erreur Supabase /save-notes:', error);
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 });
@@ -501,47 +551,86 @@ app.post('/api/save-row', async (req, res) => {
   const rowData = req.body.data;
   if (isNaN(weekNumber) || typeof rowData !== 'object') return res.status(400).json({ message: 'Données invalides.' });
   try {
-    const db = await connectToDatabase();
-    const updateFields = {};
-    const now = new Date();
-    for (const key in rowData) {
-      updateFields[`data.$[elem].${key}`] = rowData[key];
+    const supabase = getSupabase();
+    const now = new Date().toISOString();
+
+    // Récupérer le plan actuel
+    const { data: existing, error: selectError } = await supabase
+      .from('plans')
+      .select('data')
+      .eq('week', weekNumber)
+      .maybeSingle();
+    checkSupabaseError(selectError, 'save-row select');
+
+    if (!existing) {
+      return res.status(404).json({ message: 'Plan non trouvé.' });
     }
-    updateFields['data.$[elem].updatedAt'] = now;
 
-    const arrayFilters = [{
-      "elem.Enseignant": rowData[findKey(rowData, 'Enseignant')],
-      "elem.Classe": rowData[findKey(rowData, 'Classe')],
-      "elem.Jour": rowData[findKey(rowData, 'Jour')],
-      "elem.Période": rowData[findKey(rowData, 'Période')],
-      "elem.Matière": rowData[findKey(rowData, 'Matière')]
-    }];
+    const planData = existing.data || [];
 
-    const result = await db.collection('plans').updateOne(
-      { week: weekNumber },
-      { $set: updateFields },
-      { arrayFilters: arrayFilters }
-    );
+    // Trouver et mettre à jour la ligne correspondante
+    const enseignantVal = rowData[findKey(rowData, 'Enseignant')];
+    const classeVal = rowData[findKey(rowData, 'Classe')];
+    const jourVal = rowData[findKey(rowData, 'Jour')];
+    const periodeVal = rowData[findKey(rowData, 'Période')];
+    const matiereVal = rowData[findKey(rowData, 'Matière')];
 
-    if (result.modifiedCount > 0 || result.matchedCount > 0) {
-      res.status(200).json({ message: 'Ligne enregistrée.', updatedData: { updatedAt: now } });
-    } else {
-      res.status(404).json({ message: 'Ligne non trouvée.' });
+    let modified = false;
+    const updatedData = planData.map(item => {
+      if (
+        item[findKey(item, 'Enseignant')] === enseignantVal &&
+        item[findKey(item, 'Classe')] === classeVal &&
+        item[findKey(item, 'Jour')] === jourVal &&
+        item[findKey(item, 'Période')] === periodeVal &&
+        item[findKey(item, 'Matière')] === matiereVal
+      ) {
+        modified = true;
+        return { ...item, ...rowData, updatedAt: now };
+      }
+      return item;
+    });
+
+    if (!modified) {
+      return res.status(404).json({ message: 'Ligne non trouvée.' });
     }
+
+    const { error: updateError } = await supabase
+      .from('plans')
+      .update({ data: updatedData, updated_at: now })
+      .eq('week', weekNumber);
+    checkSupabaseError(updateError, 'save-row update');
+
+    res.status(200).json({ message: 'Ligne enregistrée.', updatedData: { updatedAt: now } });
   } catch (error) {
-    console.error('Erreur MongoDB /save-row:', error);
+    console.error('Erreur Supabase /save-row:', error);
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 });
 
-// Correction MongoDB ($ne dupliqué → $nin)
+// Correction : récupérer toutes les classes distinctes depuis Supabase
 app.get('/api/all-classes', async (req, res) => {
   try {
-    const db = await connectToDatabase();
-    const classes = await db.collection('plans').distinct('data.Classe', { 'data.Classe': { $nin: [null, ""] } });
-    res.status(200).json((classes || []).sort());
+    const supabase = getSupabase();
+
+    // Récupérer tous les plans et extraire les classes
+    const { data: plans, error } = await supabase
+      .from('plans')
+      .select('data');
+    checkSupabaseError(error, 'all-classes select');
+
+    const classesSet = new Set();
+    (plans || []).forEach(plan => {
+      (plan.data || []).forEach(item => {
+        const classeKey = findKey(item, 'Classe');
+        if (classeKey && item[classeKey] && item[classeKey].trim() !== '') {
+          classesSet.add(item[classeKey]);
+        }
+      });
+    });
+
+    res.status(200).json(Array.from(classesSet).sort());
   } catch (error) {
-    console.error('Erreur MongoDB /api/all-classes:', error);
+    console.error('Erreur Supabase /api/all-classes:', error);
     res.status(500).json({ message: 'Erreur serveur.' });
   }
 });
@@ -640,31 +729,32 @@ app.post('/api/generate-word', async (req, res) => {
     const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
     const filename = `Plan_hebdomadaire_S${weekNumber}_${classe.replace(/[^a-z0-9]/gi, '_')}.docx`;
 
-    // 1. Enregistrement du plan de leçon dans MongoDB
+    // Enregistrement du plan de leçon dans Supabase
     try {
-      const db = await connectToDatabase();
+      const supabase = getSupabase();
       const lessonPlanId = `S${weekNumber}_${classe.replace(/[^a-z0-9]/gi, '_')}`;
       
-      await db.collection('weeklyLessonPlans').updateOne(
-          { _id: lessonPlanId },
-          { 
-              $set: { 
-                  week: weekNumber, 
-                  classe: classe, 
-                  filename: filename, 
-                  fileData: buf, 
-                  updatedAt: new Date() 
-              },
-              $setOnInsert: { createdAt: new Date() }
-          },
-          { upsert: true }
-      );
-      console.log(`✅ Plan de leçon ${lessonPlanId} enregistré dans MongoDB.`);
+      const { error: upsertError } = await supabase
+        .from('weekly_lesson_plans')
+        .upsert({
+          id: lessonPlanId,
+          week: weekNumber,
+          classe: classe,
+          filename: filename,
+          file_data: buf.toString('base64'),
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+      
+      if (upsertError) {
+        console.error(`❌ Erreur lors de l'enregistrement du plan de leçon dans Supabase:`, upsertError);
+      } else {
+        console.log(`✅ Plan de leçon ${lessonPlanId} enregistré dans Supabase.`);
+      }
     } catch (dbError) {
-      console.error(`❌ Erreur lors de l'enregistrement du plan de leçon dans MongoDB:`, dbError);
+      console.error(`❌ Erreur lors de l'enregistrement du plan de leçon dans Supabase:`, dbError);
       // On continue pour envoyer le fichier même en cas d'échec de l'enregistrement
     }
-    // Fin 1. Enregistrement du plan de leçon dans MongoDB
+
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     res.send(buf);
@@ -674,206 +764,220 @@ app.post('/api/generate-word', async (req, res) => {
     if (!res.headersSent) {
       res.status(500).json({ message: 'Erreur interne /generate-word.' });
     }
-	  }
-	});
+  }
+});
 
-	// --------------------- Génération ZIP (Plans de Leçon Multiples) ---------------------
+// --------------------- Génération ZIP (Plans de Leçon Multiples) ---------------------
 
-	app.post('/api/generate-weekly-plans-zip', async (req, res) => {
-	  try {
-	    const { week, classes, data, notes } = req.body;
-	    const weekNumber = Number(week);
-	    if (!Number.isInteger(weekNumber) || !Array.isArray(classes) || !Array.isArray(data)) {
-	      return res.status(400).json({ message: 'Données invalides (semaine, classes ou data manquantes).' });
-	    }
+app.post('/api/generate-weekly-plans-zip', async (req, res) => {
+  try {
+    const { week, classes, data, notes } = req.body;
+    const weekNumber = Number(week);
+    if (!Number.isInteger(weekNumber) || !Array.isArray(classes) || !Array.isArray(data)) {
+      return res.status(400).json({ message: 'Données invalides (semaine, classes ou data manquantes).' });
+    }
 
-	    // Configuration du ZIP
-	    const archive = archiver('zip', { zlib: { level: 9 } });
-	    const filename = `Plans_Hebdomadaires_S${weekNumber}_${classes.length}_Classes.zip`;
+    // Configuration du ZIP
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    const filename = `Plans_Hebdomadaires_S${weekNumber}_${classes.length}_Classes.zip`;
 
-	    res.setHeader('Content-Type', 'application/zip');
-	    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-	    archive.pipe(res);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    archive.pipe(res);
 
-	    const dayOrder = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi"];
-	    const datesNode = specificWeekDateRangesNode[weekNumber];
-	    let weekStartDateNode = null;
-	    if (datesNode?.start) {
-	      weekStartDateNode = new Date(datesNode.start + 'T00:00:00Z');
-	    }
-	    if (!weekStartDateNode || isNaN(weekStartDateNode.getTime())) {
-	      archive.abort();
-	      return res.status(500).json({ message: `Dates serveur manquantes pour S${weekNumber}.` });
-	    }
+    const dayOrder = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi"];
+    const datesNode = specificWeekDateRangesNode[weekNumber];
+    let weekStartDateNode = null;
+    if (datesNode?.start) {
+      weekStartDateNode = new Date(datesNode.start + 'T00:00:00Z');
+    }
+    if (!weekStartDateNode || isNaN(weekStartDateNode.getTime())) {
+      archive.abort();
+      return res.status(500).json({ message: `Dates serveur manquantes pour S${weekNumber}.` });
+    }
 
-	    let templateBuffer;
-	    try {
-	      const response = await fetch(WORD_TEMPLATE_URL);
-	      if (!response.ok) throw new Error(`Échec modèle Word (${response.status})`);
-	      templateBuffer = Buffer.from(await response.arrayBuffer());
-	    } catch (e) {
-	      console.error("Erreur de récupération du modèle Word:", e);
-	      archive.abort();
-	      return res.status(500).json({ message: `Erreur récup modèle Word.` });
-	    }
+    let templateBuffer;
+    try {
+      const response = await fetch(WORD_TEMPLATE_URL);
+      if (!response.ok) throw new Error(`Échec modèle Word (${response.status})`);
+      templateBuffer = Buffer.from(await response.arrayBuffer());
+    } catch (e) {
+      console.error("Erreur de récupération du modèle Word:", e);
+      archive.abort();
+      return res.status(500).json({ message: `Erreur récup modèle Word.` });
+    }
 
-	    let plageSemaineText = `Semaine ${weekNumber}`;
-	    if (datesNode?.start && datesNode?.end) {
-	      const startD = new Date(datesNode.start + 'T00:00:00Z');
-	      const endD = new Date(datesNode.end + 'T00:00:00Z');
-	      if (!isNaN(startD.getTime()) && !isNaN(endD.getTime())) {
-	        plageSemaineText = `du ${formatDateFrenchNode(startD)} à ${formatDateFrenchNode(endD)}`;
-	      }
-	    }
+    let plageSemaineText = `Semaine ${weekNumber}`;
+    if (datesNode?.start && datesNode?.end) {
+      const startD = new Date(datesNode.start + 'T00:00:00Z');
+      const endD = new Date(datesNode.end + 'T00:00:00Z');
+      if (!isNaN(startD.getTime()) && !isNaN(endD.getTime())) {
+        plageSemaineText = `du ${formatDateFrenchNode(startD)} à ${formatDateFrenchNode(endD)}`;
+      }
+    }
 
-	    const sampleRow = data[0] || {};
-	    const jourKey = findKey(sampleRow, 'Jour'),
-	          periodeKey = findKey(sampleRow, 'Période'),
-	          matiereKey = findKey(sampleRow, 'Matière'),
-	          leconKey = findKey(sampleRow, 'Leçon'),
-	          travauxKey = findKey(sampleRow, 'Travaux de classe'),
-	          supportKey = findKey(sampleRow, 'Support'),
-	          devoirsKey = findKey(sampleRow, 'Devoirs');
+    const sampleRow = data[0] || {};
+    const jourKey = findKey(sampleRow, 'Jour'),
+          periodeKey = findKey(sampleRow, 'Période'),
+          matiereKey = findKey(sampleRow, 'Matière'),
+          leconKey = findKey(sampleRow, 'Leçon'),
+          travauxKey = findKey(sampleRow, 'Travaux de classe'),
+          supportKey = findKey(sampleRow, 'Support'),
+          devoirsKey = findKey(sampleRow, 'Devoirs');
 
-	    for (const classe of classes) {
-	      const classData = data.filter(item => item[findKey(item, 'Classe')] === classe);
-	      const classNotes = notes[classe] || '';
+    for (const classe of classes) {
+      const classData = data.filter(item => item[findKey(item, 'Classe')] === classe);
+      const classNotes = notes[classe] || '';
 
-	      if (classData.length === 0) {
-	        console.warn(`Aucune donnée trouvée pour la classe ${classe}. Sautée.`);
-	        continue;
-	      }
+      if (classData.length === 0) {
+        console.warn(`Aucune donnée trouvée pour la classe ${classe}. Sautée.`);
+        continue;
+      }
 
-	      const groupedByDay = {};
-	      classData.forEach(item => {
-	        const day = item[jourKey];
-	        if (day && dayOrder.includes(day)) {
-	          if (!groupedByDay[day]) groupedByDay[day] = [];
-	          groupedByDay[day].push(item);
-	        }
-	      });
+      const groupedByDay = {};
+      classData.forEach(item => {
+        const day = item[jourKey];
+        if (day && dayOrder.includes(day)) {
+          if (!groupedByDay[day]) groupedByDay[day] = [];
+          groupedByDay[day].push(item);
+        }
+      });
 
-	      const joursData = dayOrder.map(dayName => {
-	        if (!groupedByDay[dayName]) return null;
+      const joursData = dayOrder.map(dayName => {
+        if (!groupedByDay[dayName]) return null;
 
-	        const dateOfDay = getDateForDayNameNode(weekStartDateNode, dayName);
-	        const formattedDate = dateOfDay ? formatDateFrenchNode(dateOfDay) : dayName;
-	        const sortedEntries = groupedByDay[dayName].sort((a, b) => (parseInt(a[periodeKey], 10) || 0) - (parseInt(b[periodeKey], 10) || 0));
+        const dateOfDay = getDateForDayNameNode(weekStartDateNode, dayName);
+        const formattedDate = dateOfDay ? formatDateFrenchNode(dateOfDay) : dayName;
+        const sortedEntries = groupedByDay[dayName].sort((a, b) => (parseInt(a[periodeKey], 10) || 0) - (parseInt(b[periodeKey], 10) || 0));
 
-	        const matieres = sortedEntries.map(item => ({
-	          matiere: item[matiereKey] ?? "",
-	          Lecon: formatTextForWord(item[leconKey], { color: 'FF0000' }),
-	          travailDeClasse: formatTextForWord(item[travauxKey]),
-	          Support: formatTextForWord(item[supportKey], { color: 'FF0000', italic: true }),
-	          devoirs: formatTextForWord(item[devoirsKey], { color: '0000FF', italic: true })
-	        }));
+        const matieres = sortedEntries.map(item => ({
+          matiere: item[matiereKey] ?? "",
+          Lecon: formatTextForWord(item[leconKey], { color: 'FF0000' }),
+          travailDeClasse: formatTextForWord(item[travauxKey]),
+          Support: formatTextForWord(item[supportKey], { color: 'FF0000', italic: true }),
+          devoirs: formatTextForWord(item[devoirsKey], { color: '0000FF', italic: true })
+        }));
 
-	        return { jourDateComplete: formattedDate, matieres: matieres };
-	      }).filter(Boolean);
+        return { jourDateComplete: formattedDate, matieres: matieres };
+      }).filter(Boolean);
 
-	      const templateData = {
-	        semaine: weekNumber,
-	        classe: classe,
-	        jours: joursData,
-	        notes: formatTextForWord(classNotes),
-	        plageSemaine: plageSemaineText
-	      };
+      const templateData = {
+        semaine: weekNumber,
+        classe: classe,
+        jours: joursData,
+        notes: formatTextForWord(classNotes),
+        plageSemaine: plageSemaineText
+      };
 
-	      // Créer une nouvelle instance de Docxtemplater pour chaque classe
-	      const zip = new PizZip(templateBuffer);
-	      const doc = new Docxtemplater(zip, {
-	        paragraphLoop: true,
-	        nullGetter: () => "",
-	      });
+      // Créer une nouvelle instance de Docxtemplater pour chaque classe
+      const zip = new PizZip(templateBuffer);
+      const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        nullGetter: () => "",
+      });
 
-	      doc.render(templateData);
+      doc.render(templateData);
 
-	      const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
-	      const docxFilename = `Plan_hebdomadaire_S${weekNumber}_${classe.replace(/[^a-z0-9]/gi, '_')}.docx`;
+      const buf = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
+      const docxFilename = `Plan_hebdomadaire_S${weekNumber}_${classe.replace(/[^a-z0-9]/gi, '_')}.docx`;
 
-	      // Enregistrement du plan de leçon dans MongoDB (comme dans /api/generate-word)
-	      try {
-	        const db = await connectToDatabase();
-	        const lessonPlanId = `S${weekNumber}_${classe.replace(/[^a-z0-9]/gi, '_')}`;
-	        
-	        await db.collection('weeklyLessonPlans').updateOne(
-	            { _id: lessonPlanId },
-	            { 
-	                $set: { 
-	                    week: weekNumber, 
-	                    classe: classe, 
-	                    filename: docxFilename, 
-	                    fileData: buf, 
-	                    updatedAt: new Date() 
-	                },
-	                $setOnInsert: { createdAt: new Date() }
-	            },
-	            { upsert: true }
-	        );
-	        console.log(`✅ Plan de leçon ${lessonPlanId} enregistré dans MongoDB.`);
-	      } catch (dbError) {
-	        console.error(`❌ Erreur lors de l'enregistrement du plan de leçon dans MongoDB:`, dbError);
-	      }
-	      
-	      // Ajouter le DOCX au ZIP
-	      archive.append(buf, { name: docxFilename });
-	    }
+      // Enregistrement du plan de leçon dans Supabase
+      try {
+        const supabase = getSupabase();
+        const lessonPlanId = `S${weekNumber}_${classe.replace(/[^a-z0-9]/gi, '_')}`;
+        
+        const { error: upsertError } = await supabase
+          .from('weekly_lesson_plans')
+          .upsert({
+            id: lessonPlanId,
+            week: weekNumber,
+            classe: classe,
+            filename: docxFilename,
+            file_data: buf.toString('base64'),
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'id' });
 
-	    archive.finalize();
+        if (upsertError) {
+          console.error(`❌ Erreur lors de l'enregistrement du plan de leçon dans Supabase:`, upsertError);
+        } else {
+          console.log(`✅ Plan de leçon ${lessonPlanId} enregistré dans Supabase.`);
+        }
+      } catch (dbError) {
+        console.error(`❌ Erreur lors de l'enregistrement du plan de leçon dans Supabase:`, dbError);
+      }
+      
+      // Ajouter le DOCX au ZIP
+      archive.append(buf, { name: docxFilename });
+    }
 
-	  } catch (error) {
-	    console.error('❌ Erreur serveur /generate-weekly-plans-zip:', error);
-	    if (!res.headersSent) {
-	      res.status(500).json({ message: 'Erreur interne /generate-weekly-plans-zip.' });
-	    }
-	  }
-	});
+    archive.finalize();
 
-	// --------------------- Téléchargement Plan de Leçon (DOCX) ---------------------
+  } catch (error) {
+    console.error('❌ Erreur serveur /generate-weekly-plans-zip:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Erreur interne /generate-weekly-plans-zip.' });
+    }
+  }
+});
 
-	app.get('/api/download-weekly-plan/:week/:classe', async (req, res) => {
-	  try {
-	    const weekNumber = Number(req.params.week);
-	    const classe = req.params.classe;
-	    if (!Number.isInteger(weekNumber) || !classe) {
-	      return res.status(400).json({ message: 'Semaine ou classe invalide.' });
-	    }
+// --------------------- Téléchargement Plan de Leçon (DOCX) ---------------------
 
-	    const lessonPlanId = `S${weekNumber}_${classe.replace(/[^a-z0-9]/gi, '_')}`;
-	    const db = await connectToDatabase();
-	    const planDocument = await db.collection('weeklyLessonPlans').findOne({ _id: lessonPlanId });
+app.get('/api/download-weekly-plan/:week/:classe', async (req, res) => {
+  try {
+    const weekNumber = Number(req.params.week);
+    const classe = req.params.classe;
+    if (!Number.isInteger(weekNumber) || !classe) {
+      return res.status(400).json({ message: 'Semaine ou classe invalide.' });
+    }
 
-	    if (!planDocument || !planDocument.fileData) {
-	      console.log(`⚠️ Plan de leçon non trouvé pour ${lessonPlanId}`);
-	      return res.status(404).json({ message: 'Plan de leçon non généré ou non trouvé.' });
-	    }
+    const lessonPlanId = `S${weekNumber}_${classe.replace(/[^a-z0-9]/gi, '_')}`;
+    const supabase = getSupabase();
 
-	    console.log(`✅ Plan de leçon trouvé pour ${lessonPlanId}. Envoi du fichier.`);
-	    res.setHeader('Content-Disposition', `attachment; filename="${planDocument.filename}"`);
-	    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-	    res.send(planDocument.fileData.buffer); // fileData est un BSON Binary, on utilise .buffer pour le Buffer Node.js
+    const { data: planDoc, error } = await supabase
+      .from('weekly_lesson_plans')
+      .select('filename, file_data')
+      .eq('id', lessonPlanId)
+      .maybeSingle();
+    checkSupabaseError(error, 'download-weekly-plan select');
 
-	  } catch (error) {
-	    console.error('❌ Erreur serveur /download-weekly-plan:', error);
-	    if (!res.headersSent) {
-	      res.status(500).json({ message: 'Erreur interne /download-weekly-plan.' });
-	    }
-	  }
-	});
+    if (!planDoc || !planDoc.file_data) {
+      console.log(`⚠️ Plan de leçon non trouvé pour ${lessonPlanId}`);
+      return res.status(404).json({ message: 'Plan de leçon non généré ou non trouvé.' });
+    }
 
-	// --------------------- Génération Excel (workbook) ---------------------
+    console.log(`✅ Plan de leçon trouvé pour ${lessonPlanId}. Envoi du fichier.`);
+    const fileBuffer = Buffer.from(planDoc.file_data, 'base64');
+    res.setHeader('Content-Disposition', `attachment; filename="${planDoc.filename}"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.send(fileBuffer);
+
+  } catch (error) {
+    console.error('❌ Erreur serveur /download-weekly-plan:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Erreur interne /download-weekly-plan.' });
+    }
+  }
+});
+
+// --------------------- Génération Excel (workbook) ---------------------
 
 app.post('/api/generate-excel-workbook', async (req, res) => {
   try {
     const weekNumber = Number(req.body.week);
     if (!Number.isInteger(weekNumber)) return res.status(400).json({ message: 'Semaine invalide.' });
 
-    const db = await connectToDatabase();
-    const planDocument = await db.collection('plans').findOne({ week: weekNumber });
-    if (!planDocument?.data?.length) return res.status(404).json({ message: `Aucune donnée pour S${weekNumber}.` });
+    const supabase = getSupabase();
+    const { data: planRow, error } = await supabase
+      .from('plans')
+      .select('data')
+      .eq('week', weekNumber)
+      .maybeSingle();
+    checkSupabaseError(error, 'generate-excel-workbook select');
+
+    if (!planRow?.data?.length) return res.status(404).json({ message: `Aucune donnée pour S${weekNumber}.` });
 
     const finalHeaders = [ 'Enseignant', 'Jour', 'Période', 'Classe', 'Matière', 'Leçon', 'Travaux de classe', 'Support', 'Devoirs' ];
-    const formattedData = planDocument.data.map(item => {
+    const formattedData = planRow.data.map(item => {
       const row = {};
       finalHeaders.forEach(header => {
         const itemKey = findKey(item, header);
@@ -908,8 +1012,13 @@ app.post('/api/full-report-by-class', async (req, res) => {
     const { classe: requestedClass } = req.body;
     if (!requestedClass) return res.status(400).json({ message: 'Classe requise.' });
 
-    const db = await connectToDatabase();
-    const allPlans = await db.collection('plans').find({}).sort({ week: 1 }).toArray();
+    const supabase = getSupabase();
+    const { data: allPlans, error } = await supabase
+      .from('plans')
+      .select('week, data')
+      .order('week', { ascending: true });
+    checkSupabaseError(error, 'full-report-by-class select');
+
     if (!allPlans || allPlans.length === 0) return res.status(404).json({ message: 'Aucune donnée.' });
 
     const dataBySubject = {};
@@ -1036,7 +1145,6 @@ app.post('/api/generate-ai-lesson-plan', async (req, res) => {
     if (jour && datesNode?.start) {
       const weekStartDateNode = new Date(datesNode.start + 'T00:00:00Z');
       if (!isNaN(weekStartDateNode.getTime())) {
-        // Extract day name from the jour field (in case it contains a full date)
         const dayName = extractDayNameFromString(jour);
         if (dayName) {
           const dateOfDay = getDateForDayNameNode(weekStartDateNode, dayName);
@@ -1224,7 +1332,7 @@ ${jsonStructure}`;
   }
 });
 
-// Sauvegarder un plan de leçon généré dans MongoDB
+// Sauvegarder un plan de leçon généré dans Supabase
 app.post('/api/save-lesson-plan', async (req, res) => {
   try {
     console.log('💾 [Save Lesson Plan] Sauvegarde d\'un plan de leçon');
@@ -1235,9 +1343,8 @@ app.post('/api/save-lesson-plan', async (req, res) => {
       return res.status(400).json({ message: 'Données manquantes pour la sauvegarde.' });
     }
     
-    const db = await connectToDatabase();
+    const supabase = getSupabase();
     
-    // Créer ou mettre à jour le document du plan de leçon
     const enseignant = rowData[findKey(rowData, 'Enseignant')] || '';
     const classe = rowData[findKey(rowData, 'Classe')] || '';
     const matiere = rowData[findKey(rowData, 'Matière')] || '';
@@ -1246,24 +1353,22 @@ app.post('/api/save-lesson-plan', async (req, res) => {
     
     const lessonPlanId = `${week}_${enseignant}_${classe}_${matiere}_${periode}_${jour}`.replace(/\s+/g, '_');
     
-    await db.collection('lessonPlans').updateOne(
-      { _id: lessonPlanId },
-      {
-        $set: {
-          week: Number(week),
-          enseignant,
-          classe,
-          matiere,
-          periode,
-          jour,
-          filename,
-          fileBuffer: Buffer.from(fileBuffer, 'base64'),
-          createdAt: new Date(),
-          rowData
-        }
-      },
-      { upsert: true }
-    );
+    const { error } = await supabase
+      .from('lesson_plans')
+      .upsert({
+        id: lessonPlanId,
+        week: Number(week),
+        enseignant,
+        classe,
+        matiere,
+        periode,
+        jour,
+        filename,
+        file_buffer: fileBuffer, // déjà en base64 depuis le frontend
+        row_data: rowData,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+    checkSupabaseError(error, 'save-lesson-plan upsert');
     
     console.log(`✅ [Save Lesson Plan] Plan sauvegardé: ${lessonPlanId}`);
     res.status(200).json({ success: true, message: 'Plan de leçon sauvegardé.', lessonPlanId });
@@ -1392,8 +1497,6 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
         console.log(`  ├─ Travaux: "${travaux.substring(0, 30)}${travaux.length > 30 ? '...' : ''}"`);
         console.log(`  └─ Support: "${support.substring(0, 30)}${support.length > 30 ? '...' : ''}"`);
         
-        // Note: Cette vérification n'est plus nécessaire car déjà filtrée au début
-        // Mais on la garde par sécurité
         if (!lecon || lecon.trim() === '') {
           throw new Error('⚠️ Leçon vide - impossible de générer un plan de leçon sans contenu de leçon');
         }
@@ -1450,13 +1553,12 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
               if (!aiResponse.ok) {
                 const errorBody = await aiResponse.json().catch(() => ({}));
                 
-                // Si erreur 429 (rate limit), on réessaye après un délai
                 if (aiResponse.status === 429 && retryCount < MAX_RETRIES) {
-                  const waitTime = Math.pow(2, retryCount) * 5000; // 5s, 10s, 20s
+                  const waitTime = Math.pow(2, retryCount) * 5000;
                   console.log(`⏳ [GROQ] Rate limit atteint, attente ${waitTime/1000}s avant retry ${retryCount+1}/${MAX_RETRIES}`);
                   await new Promise(resolve => setTimeout(resolve, waitTime));
                   retryCount++;
-                  continue; // Réessayer
+                  continue;
                 }
                 
                 console.error(`❌ [GROQ Error] Status ${aiResponse.status}:`, JSON.stringify(errorBody, null, 2));
@@ -1471,7 +1573,7 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
                 throw new Error('GROQ a retourné une réponse vide');
               }
               
-              break; // Succès, sortir de la boucle retry
+              break;
               
             } else {
               // GEMINI API
@@ -1487,18 +1589,16 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
               if (!aiResponse.ok) {
                 const errorBody = await aiResponse.json().catch(() => ({}));
                 
-                // Si erreur 429 (rate limit), on réessaye après un délai
                 if (aiResponse.status === 429 && retryCount < MAX_RETRIES) {
-                  const waitTime = Math.pow(2, retryCount) * 5000; // 5s, 10s, 20s
+                  const waitTime = Math.pow(2, retryCount) * 5000;
                   console.log(`⏳ [GEMINI] Quota dépassé, attente ${waitTime/1000}s avant retry ${retryCount+1}/${MAX_RETRIES}`);
                   await new Promise(resolve => setTimeout(resolve, waitTime));
                   retryCount++;
-                  continue; // Réessayer
+                  continue;
                 }
                 
                 console.error(`❌ [GEMINI Error] Status ${aiResponse.status}:`, JSON.stringify(errorBody, null, 2));
                 
-                // Message spécifique pour quota dépassé
                 if (aiResponse.status === 429) {
                   throw new Error(`⚠️ QUOTA GEMINI DÉPASSÉ (429): ${errorBody.error?.message || 'Limite atteinte'}`);
                 }
@@ -1514,18 +1614,17 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
                 throw new Error('GEMINI a retourné une réponse vide');
               }
               
-              break; // Succès, sortir de la boucle retry
+              break;
             }
           } catch (fetchError) {
-            // Si erreur réseau, réessayer
             if (retryCount < MAX_RETRIES) {
-              const waitTime = Math.pow(2, retryCount) * 3000; // 3s, 6s, 12s
+              const waitTime = Math.pow(2, retryCount) * 3000;
               console.log(`⏳ Erreur réseau, attente ${waitTime/1000}s avant retry ${retryCount+1}/${MAX_RETRIES}`);
               await new Promise(resolve => setTimeout(resolve, waitTime));
               retryCount++;
               continue;
             }
-            throw fetchError; // Après 3 essais, lancer l'erreur
+            throw fetchError;
           }
         }
         
@@ -1540,7 +1639,6 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
           
           jsonData = JSON.parse(cleanedJson);
           
-          // Vérifier que les champs essentiels sont présents
           if (!jsonData.TitreUnite && !jsonData.Objectifs && !jsonData.etapes) {
             throw new Error('Structure JSON invalide : champs essentiels manquants');
           }
@@ -1555,7 +1653,6 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
         const zip = new PizZip(templateBuffer);
         const doc = new Docxtemplater(zip, { paragraphLoop: true, nullGetter: () => "" });
 
-        // Formatter les données pour le template
         const minutageString = (jsonData.etapes || []).map(e =>
           `${e.phase || ""} (${e.duree || ""}):\n${e.activite || ""}`
         ).join('\n\n');
@@ -1577,17 +1674,15 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
           NomEnseignant: enseignant,
           Date: formattedDate,
           Deroulement: minutageString,
-          Contenu: minutageString, // Le contenu est le déroulement des étapes
-          Minutage: minutageString, // Alias pour compatibilité
+          Contenu: minutageString,
+          Minutage: minutageString,
         };
 
         doc.render(templateData);
         const docBuffer = doc.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 
-        // Format: Matière_Classe_Semaine_Séance_Enseignant.docx
         const docFilename = `${sanitizeForFilename(matiere)}_${sanitizeForFilename(classe)}_S${weekNumber}_P${sanitizeForFilename(seance)}_${sanitizeForFilename(enseignant)}.docx`;
         
-        // Ajouter au ZIP
         archive.append(docBuffer, { name: docFilename });
         successCount++;
         
@@ -1595,10 +1690,9 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
 
         // Délai adaptatif pour éviter rate limit
         if (i < validRows.length - 1) {
-          // Délai progressif : 3s pour les premières, 5s après 10, 8s après 20
-          let delay = 3000; // 3 secondes par défaut
-          if (i >= 20) delay = 8000; // 8 secondes après 20 générations
-          else if (i >= 10) delay = 5000; // 5 secondes après 10 générations
+          let delay = 3000;
+          if (i >= 20) delay = 8000;
+          else if (i >= 10) delay = 5000;
           
           console.log(`⏳ Pause de ${delay/1000}s avant la prochaine génération...`);
           await new Promise(resolve => setTimeout(resolve, delay));
@@ -1616,11 +1710,10 @@ app.post('/api/generate-multiple-ai-lesson-plans', async (req, res) => {
           classe,
           matiere,
           enseignant,
-          lecon: lecon.substring(0, 50) // Premiers 50 caractères
+          lecon: lecon.substring(0, 50)
         });
         errorCount++;
         
-        // Ajouter un fichier texte d'erreur DÉTAILLÉ dans le ZIP
         const errorFilename = `ERREUR_${String(i+1).padStart(2, '0')}_${sanitizeForFilename(classe)}_${sanitizeForFilename(matiere)}.txt`;
         const errorContent = `❌ ERREUR DE GÉNÉRATION - PLAN DE LEÇON IA
 
@@ -1672,7 +1765,6 @@ Provider IA: ${USE_GROQ ? 'GROQ (llama-3.3-70b-versatile)' : 'GEMINI'}
 
     console.log(`📊 [Multiple AI] Résultat: ${successCount} succès, ${errorCount} erreurs`);
     
-    // Ajouter un fichier récapitulatif final
     const summaryContent = `📊 RÉCAPITULATIF DE GÉNÉRATION - PLANS DE LEÇON IA
     
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1731,14 +1823,19 @@ Généré par le système de gestion des plans hebdomadaires
   }
 });
 
-// Télécharger un plan de leçon depuis MongoDB
+// Télécharger un plan de leçon depuis Supabase
 app.get('/api/download-lesson-plan/:lessonPlanId', async (req, res) => {
   try {
     const { lessonPlanId } = req.params;
     console.log(`📥 [Download Lesson Plan] Téléchargement: ${lessonPlanId}`);
     
-    const db = await connectToDatabase();
-    const lessonPlan = await db.collection('lessonPlans').findOne({ _id: lessonPlanId });
+    const supabase = getSupabase();
+    const { data: lessonPlan, error } = await supabase
+      .from('lesson_plans')
+      .select('filename, file_buffer')
+      .eq('id', lessonPlanId)
+      .maybeSingle();
+    checkSupabaseError(error, 'download-lesson-plan select');
     
     if (!lessonPlan) {
       return res.status(404).json({ message: 'Plan de leçon introuvable.' });
@@ -1746,7 +1843,7 @@ app.get('/api/download-lesson-plan/:lessonPlanId', async (req, res) => {
     
     res.setHeader('Content-Disposition', `attachment; filename="${lessonPlan.filename}"`);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    res.send(lessonPlan.fileBuffer.buffer);
+    res.send(Buffer.from(lessonPlan.file_buffer, 'base64'));
     
     console.log(`✅ [Download Lesson Plan] Envoyé: ${lessonPlan.filename}`);
     
@@ -1766,13 +1863,15 @@ app.get('/api/lesson-plans/:week', async (req, res) => {
     
     console.log(`📋 [Lesson Plans List] Récupération pour semaine ${week}`);
     
-    const db = await connectToDatabase();
-    const lessonPlans = await db.collection('lessonPlans')
-      .find({ week }, { projection: { fileBuffer: 0 } }) // Exclure le buffer pour économiser la bande passante
-      .toArray();
+    const supabase = getSupabase();
+    const { data: lessonPlans, error } = await supabase
+      .from('lesson_plans')
+      .select('id, week, enseignant, classe, matiere, periode, jour, filename, row_data, updated_at')
+      .eq('week', week);
+    checkSupabaseError(error, 'lesson-plans list select');
     
-    console.log(`✅ [Lesson Plans List] ${lessonPlans.length} plan(s) trouvé(s)`);
-    res.status(200).json(lessonPlans);
+    console.log(`✅ [Lesson Plans List] ${(lessonPlans || []).length} plan(s) trouvé(s)`);
+    res.status(200).json(lessonPlans || []);
     
   } catch (error) {
     console.error('❌ Erreur récupération liste plans de leçon:', error);
@@ -1785,9 +1884,8 @@ app.get('/api/lesson-plans/:week', async (req, res) => {
 app.post('/api/test-weekly-reminders', async (req, res) => {
   try {
     const { apiKey, weekNumber } = req.body;
-    const targetWeek = weekNumber || 17; // Par défaut à la semaine 17
+    const targetWeek = weekNumber || 17;
     
-    // Sécurité basique avec clé API
     const CRON_API_KEY = process.env.CRON_API_KEY || 'default-cron-key-change-me';
     if (apiKey !== CRON_API_KEY) {
       return res.status(401).json({ message: 'Non autorisé. Clé API invalide.' });
@@ -1795,27 +1893,29 @@ app.post('/api/test-weekly-reminders', async (req, res) => {
 
     console.log(`🧪 [Test Reminders] Test forcé pour la semaine ${targetWeek}`);
 
-    // Récupérer les données de la semaine
-    const db = await connectToDatabase();
-    const planDocument = await db.collection('plans').findOne({ week: targetWeek });
+    const supabase = getSupabase();
+    const { data: planRow, error: planError } = await supabase
+      .from('plans')
+      .select('data')
+      .eq('week', targetWeek)
+      .maybeSingle();
+    checkSupabaseError(planError, 'test-weekly-reminders plans select');
     
-    if (!planDocument || !planDocument.data || planDocument.data.length === 0) {
+    if (!planRow || !planRow.data || planRow.data.length === 0) {
       return res.status(200).json({ 
         message: `Aucune donnée pour la semaine ${targetWeek}.`,
         week: targetWeek
       });
     }
 
-    // Trouver les enseignants avec des travaux incomplets
     const incompleteTeachers = {};
-    const planData = planDocument.data;
+    const planData = planRow.data;
     
     planData.forEach(item => {
       const teacher = item[findKey(item, 'Enseignant')];
       const taskVal = item[findKey(item, 'Travaux de classe')];
       const className = item[findKey(item, 'Classe')];
       
-      // Un enseignant est incomplet si au moins un "Travaux de classe" est vide
       if (teacher && className && (taskVal == null || String(taskVal).trim() === '')) {
         if (!incompleteTeachers[teacher]) {
           incompleteTeachers[teacher] = new Set();
@@ -1834,22 +1934,22 @@ app.post('/api/test-weekly-reminders', async (req, res) => {
       });
     }
 
-    // Récupérer les abonnements push depuis MongoDB
-    const subscriptions = await db.collection('pushSubscriptions').find({}).toArray();
+    const { data: subscriptions, error: subError } = await supabase
+      .from('push_subscriptions')
+      .select('*');
+    checkSupabaseError(subError, 'test-weekly-reminders push_subscriptions select');
     
     let notificationsSent = 0;
     const notificationResults = [];
 
-    // Envoyer des notifications à chaque enseignant incomplet
     for (const teacher of teachersToNotify) {
-      const subscription = subscriptions.find(sub => sub.username === teacher);
+      const subscription = (subscriptions || []).find(sub => sub.username === teacher);
       
       if (subscription && subscription.subscription) {
         const classes = [...incompleteTeachers[teacher]].sort().join(', ');
         const lang = getTeacherLanguage(teacher);
         const msgs = notificationMessages[lang];
         
-        // Message de rappel avec urgence
         const message = {
           title: msgs.reminderTitle,
           body: msgs.reminderBody(teacher, targetWeek),
@@ -1857,8 +1957,8 @@ app.post('/api/test-weekly-reminders', async (req, res) => {
           badge: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
           requireInteraction: true,
           vibrate: [200, 100, 200, 100, 200],
-          tag: `plan-reminder-${targetWeek}-${Date.now()}`, // Tag unique pour chaque rappel
-          renotify: true, // Force la réaffichage même si tag similaire
+          tag: `plan-reminder-${targetWeek}-${Date.now()}`,
+          renotify: true,
           data: {
             url: 'https://plan-hebdomadaire-2026-boys.vercel.app',
             week: targetWeek,
@@ -1891,10 +1991,9 @@ app.post('/api/test-weekly-reminders', async (req, res) => {
             error: error.message
           });
           
-          // Si l'abonnement est invalide (410 Gone), le supprimer
           if (error.statusCode === 410) {
             console.log(`🗑️ Suppression de l'abonnement invalide pour ${teacher}`);
-            await db.collection('pushSubscriptions').deleteOne({ username: teacher });
+            await supabase.from('push_subscriptions').delete().eq('username', teacher);
           }
         }
       } else {
@@ -1925,7 +2024,7 @@ app.post('/api/test-weekly-reminders', async (req, res) => {
 
 // --------------------- Système de Notifications Push ---------------------
 
-// Stocker les abonnements push (en production, utiliser une vraie DB)
+// Cache local des abonnements push
 const pushSubscriptions = new Map();
 
 // Sauvegarder un abonnement push
@@ -1936,13 +2035,15 @@ app.post('/api/subscribe-push', async (req, res) => {
       return res.status(400).json({ message: 'Username et subscription requis.' });
     }
 
-    // Sauvegarder dans MongoDB
-    const db = await connectToDatabase();
-    await db.collection('pushSubscriptions').updateOne(
-      { username: username },
-      { $set: { subscription: subscription, updatedAt: new Date() } },
-      { upsert: true }
-    );
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from('push_subscriptions')
+      .upsert({
+        username: username,
+        subscription: subscription,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'username' });
+    checkSupabaseError(error, 'subscribe-push upsert');
 
     // Cache local
     pushSubscriptions.set(username, subscription);
@@ -1963,8 +2064,13 @@ app.post('/api/unsubscribe-push', async (req, res) => {
       return res.status(400).json({ message: 'Username requis.' });
     }
 
-    const db = await connectToDatabase();
-    await db.collection('pushSubscriptions').deleteOne({ username: username });
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from('push_subscriptions')
+      .delete()
+      .eq('username', username);
+    checkSupabaseError(error, 'unsubscribe-push delete');
+
     pushSubscriptions.delete(username);
     
     console.log(`✅ Désabonnement push pour ${username}`);
@@ -2005,21 +2111,17 @@ function getTeacherLanguage(teacher) {
 }
 
 // Vérifier les enseignants incomplets et envoyer des notifications
-// Cette route sera appelée par un CRON job chaque LUNDI (3 fois par jour)
 app.post('/api/check-incomplete-and-notify', async (req, res) => {
   try {
     const { apiKey } = req.body;
     
-    // Sécurité basique avec clé API
     if (apiKey !== process.env.CRON_API_KEY) {
       return res.status(401).json({ message: 'Non autorisé.' });
     }
 
-    // Déterminer la semaine actuelle
     const currentDate = new Date();
     let currentWeek = null;
     
-    // Trouver la semaine actuelle
     for (const [week, dates] of Object.entries(specificWeekDateRangesNode)) {
       const startDate = new Date(dates.start + 'T00:00:00Z');
       const endDate = new Date(dates.end + 'T23:59:59Z');
@@ -2036,17 +2138,20 @@ app.post('/api/check-incomplete-and-notify', async (req, res) => {
 
     console.log(`📅 Vérification des plans incomplets pour la semaine ${currentWeek}`);
 
-    // Récupérer les données de la semaine
-    const db = await connectToDatabase();
-    const planDocument = await db.collection('plans').findOne({ week: currentWeek });
+    const supabase = getSupabase();
+    const { data: planRow, error: planError } = await supabase
+      .from('plans')
+      .select('data')
+      .eq('week', currentWeek)
+      .maybeSingle();
+    checkSupabaseError(planError, 'check-incomplete plans select');
     
-    if (!planDocument || !planDocument.data || planDocument.data.length === 0) {
+    if (!planRow || !planRow.data || planRow.data.length === 0) {
       return res.status(200).json({ message: `Aucune donnée pour la semaine ${currentWeek}.` });
     }
 
-    // Trouver les enseignants avec des travaux incomplets
     const incompleteTeachers = {};
-    const planData = planDocument.data;
+    const planData = planRow.data;
     
     planData.forEach(item => {
       const teacher = item[findKey(item, 'Enseignant')];
@@ -2064,15 +2169,16 @@ app.post('/api/check-incomplete-and-notify', async (req, res) => {
     const teachersToNotify = Object.keys(incompleteTeachers);
     console.log(`📊 ${teachersToNotify.length} enseignants avec plans incomplets:`, teachersToNotify);
 
-    // Récupérer les abonnements push depuis MongoDB
-    const subscriptions = await db.collection('pushSubscriptions').find({}).toArray();
+    const { data: subscriptions, error: subError } = await supabase
+      .from('push_subscriptions')
+      .select('*');
+    checkSupabaseError(subError, 'check-incomplete push_subscriptions select');
     
     let notificationsSent = 0;
     const notificationResults = [];
 
-    // Envoyer des notifications à chaque enseignant incomplet avec leur langue
     for (const teacher of teachersToNotify) {
-      const subscription = subscriptions.find(sub => sub.username === teacher);
+      const subscription = (subscriptions || []).find(sub => sub.username === teacher);
       
       if (subscription && subscription.subscription) {
         const classes = [...incompleteTeachers[teacher]].sort().join(', ');
@@ -2098,9 +2204,7 @@ app.post('/api/check-incomplete-and-notify', async (req, res) => {
         };
 
         try {
-          // Envoyer la notification push via web-push
           const payload = JSON.stringify(message);
-          
           await webpush.sendNotification(subscription.subscription, payload);
           
           notificationResults.push({
@@ -2121,10 +2225,9 @@ app.post('/api/check-incomplete-and-notify', async (req, res) => {
             error: error.message
           });
           
-          // Si l'abonnement est invalide (410 Gone), le supprimer
           if (error.statusCode === 410) {
             console.log(`🗑️ Suppression de l'abonnement invalide pour ${teacher}`);
-            await db.collection('pushSubscriptions').deleteOne({ username: teacher });
+            await supabase.from('push_subscriptions').delete().eq('username', teacher);
           }
         }
       } else {
@@ -2159,8 +2262,13 @@ app.post('/api/test-notification', async (req, res) => {
       return res.status(400).json({ message: 'Username requis.' });
     }
 
-    const db = await connectToDatabase();
-    const subscription = await db.collection('pushSubscriptions').findOne({ username: username });
+    const supabase = getSupabase();
+    const { data: subscription, error } = await supabase
+      .from('push_subscriptions')
+      .select('subscription')
+      .eq('username', username)
+      .maybeSingle();
+    checkSupabaseError(error, 'test-notification select');
     
     if (!subscription) {
       return res.status(404).json({ message: `Aucun abonnement trouvé pour ${username}.` });
@@ -2168,7 +2276,6 @@ app.post('/api/test-notification', async (req, res) => {
 
     console.log(`🧪 Test de notification pour ${username}`);
     
-    // Envoyer une notification de test
     const testMessage = {
       title: '🧪 Test de Notification',
       body: `Bonjour ${username}, ceci est un test de notification push. Si vous voyez ce message, les notifications fonctionnent correctement !`,
@@ -2191,10 +2298,9 @@ app.post('/api/test-notification', async (req, res) => {
     } catch (pushError) {
       console.error('❌ Erreur envoi notification test:', pushError);
       
-      // Si l'abonnement est invalide (410 Gone), le supprimer
       if (pushError.statusCode === 410) {
         console.log(`🗑️ Suppression de l'abonnement invalide pour ${username}`);
-        await db.collection('pushSubscriptions').deleteOne({ username: username });
+        await supabase.from('push_subscriptions').delete().eq('username', username);
       }
       
       throw new Error(`Échec d'envoi: ${pushError.message}`);
@@ -2215,26 +2321,21 @@ app.get('/api/vapid-public-key', (req, res) => {
 });
 
 // ✅ FONCTIONNALITÉ 3: Système d'alertes automatiques hebdomadaires
-// Route pour vérifier et envoyer des alertes TOUTES LES 3 HEURES depuis le LUNDI
-// Cette route doit être appelée par un CRON job externe (GitHub Actions, cron-job.org, etc.)
 app.post('/api/send-weekly-reminders', async (req, res) => {
   try {
     const { apiKey } = req.body;
     
-    // Sécurité basique avec clé API
     const CRON_API_KEY = process.env.CRON_API_KEY || 'default-cron-key-change-me';
     if (apiKey !== CRON_API_KEY) {
       return res.status(401).json({ message: 'Non autorisé. Clé API invalide.' });
     }
 
     const now = new Date();
-    const dayOfWeek = now.getDay(); // 0 = Dimanche, 1 = Lundi, ..., 6 = Samedi
+    const dayOfWeek = now.getDay();
     const hourOfDay = now.getHours();
 
     console.log(`📅 [Weekly Reminders] Vérification: ${now.toISOString()} - Jour: ${dayOfWeek}, Heure: ${hourOfDay}`);
 
-    // ⚠️ IMPORTANT: N'envoyer des alertes QUE du LUNDI (1) au JEUDI (4)
-    // Le CRON doit tourner toutes les 3 heures pendant ces jours
     if (dayOfWeek < 1 || dayOfWeek > 4) {
       return res.status(200).json({ 
         message: 'Alerte désactivée (hors période Lundi-Jeudi).',
@@ -2243,7 +2344,6 @@ app.post('/api/send-weekly-reminders', async (req, res) => {
       });
     }
 
-    // Déterminer la semaine actuelle
     let currentWeek = null;
     
     for (const [week, dates] of Object.entries(specificWeekDateRangesNode)) {
@@ -2262,27 +2362,29 @@ app.post('/api/send-weekly-reminders', async (req, res) => {
 
     console.log(`📅 [Weekly Reminders] Semaine active: ${currentWeek}`);
 
-    // Récupérer les données de la semaine
-    const db = await connectToDatabase();
-    const planDocument = await db.collection('plans').findOne({ week: currentWeek });
+    const supabase = getSupabase();
+    const { data: planRow, error: planError } = await supabase
+      .from('plans')
+      .select('data')
+      .eq('week', currentWeek)
+      .maybeSingle();
+    checkSupabaseError(planError, 'send-weekly-reminders plans select');
     
-    if (!planDocument || !planDocument.data || planDocument.data.length === 0) {
+    if (!planRow || !planRow.data || planRow.data.length === 0) {
       return res.status(200).json({ 
         message: `Aucune donnée pour la semaine ${currentWeek}.`,
         week: currentWeek
       });
     }
 
-    // Trouver les enseignants avec des travaux incomplets
     const incompleteTeachers = {};
-    const planData = planDocument.data;
+    const planData = planRow.data;
     
     planData.forEach(item => {
       const teacher = item[findKey(item, 'Enseignant')];
       const taskVal = item[findKey(item, 'Travaux de classe')];
       const className = item[findKey(item, 'Classe')];
       
-      // Un enseignant est incomplet si au moins un "Travaux de classe" est vide
       if (teacher && className && (taskVal == null || String(taskVal).trim() === '')) {
         if (!incompleteTeachers[teacher]) {
           incompleteTeachers[teacher] = new Set();
@@ -2302,22 +2404,22 @@ app.post('/api/send-weekly-reminders', async (req, res) => {
       });
     }
 
-    // Récupérer les abonnements push depuis MongoDB
-    const subscriptions = await db.collection('pushSubscriptions').find({}).toArray();
+    const { data: subscriptions, error: subError } = await supabase
+      .from('push_subscriptions')
+      .select('*');
+    checkSupabaseError(subError, 'send-weekly-reminders push_subscriptions select');
     
     let notificationsSent = 0;
     const notificationResults = [];
 
-    // Envoyer des notifications à chaque enseignant incomplet
     for (const teacher of teachersToNotify) {
-      const subscription = subscriptions.find(sub => sub.username === teacher);
+      const subscription = (subscriptions || []).find(sub => sub.username === teacher);
       
       if (subscription && subscription.subscription) {
         const classes = [...incompleteTeachers[teacher]].sort().join(', ');
         const lang = getTeacherLanguage(teacher);
         const msgs = notificationMessages[lang];
         
-        // Message de rappel avec urgence
         const message = {
           title: msgs.reminderTitle,
           body: msgs.reminderBody(teacher, currentWeek),
@@ -2325,8 +2427,8 @@ app.post('/api/send-weekly-reminders', async (req, res) => {
           badge: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
           requireInteraction: true,
           vibrate: [200, 100, 200, 100, 200],
-          tag: `plan-reminder-${currentWeek}-${Date.now()}`, // Tag unique pour chaque rappel
-          renotify: true, // Force la réaffichage même si tag similaire
+          tag: `plan-reminder-${currentWeek}-${Date.now()}`,
+          renotify: true,
           data: {
             url: 'https://plan-hebdomadaire-2026-boys.vercel.app',
             week: currentWeek,
@@ -2360,10 +2462,9 @@ app.post('/api/send-weekly-reminders', async (req, res) => {
             error: error.message
           });
           
-          // Si l'abonnement est invalide (410 Gone), le supprimer
           if (error.statusCode === 410) {
             console.log(`🗑️ Suppression de l'abonnement invalide pour ${teacher}`);
-            await db.collection('pushSubscriptions').deleteOne({ username: teacher });
+            await supabase.from('push_subscriptions').delete().eq('username', teacher);
           }
         }
       } else {
@@ -2396,6 +2497,7 @@ app.post('/api/send-weekly-reminders', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
+
 // ============================================================================
 // NOUVELLE ROUTE: Notification en temps réel pour enseignants incomplets
 // ============================================================================
@@ -2407,7 +2509,7 @@ app.post('/api/notify-incomplete-teachers', async (req, res) => {
       return res.status(400).json({ message: 'Paramètres invalides.' });
     }
 
-    const db = await connectToDatabase();
+    const supabase = getSupabase();
     const teachersToNotify = Object.keys(incompleteTeachers);
     
     if (teachersToNotify.length === 0) {
@@ -2419,15 +2521,16 @@ app.post('/api/notify-incomplete-teachers', async (req, res) => {
 
     console.log(`🔔 Notification en temps réel pour ${teachersToNotify.length} enseignants incomplets`);
 
-    // Récupérer les abonnements push depuis MongoDB
-    const subscriptions = await db.collection('pushSubscriptions').find({}).toArray();
+    const { data: subscriptions, error: subError } = await supabase
+      .from('push_subscriptions')
+      .select('*');
+    checkSupabaseError(subError, 'notify-incomplete-teachers push_subscriptions select');
     
     let notificationsSent = 0;
     const notificationResults = [];
 
-    // Envoyer des notifications à chaque enseignant incomplet
     for (const teacher of teachersToNotify) {
-      const subscription = subscriptions.find(sub => sub.username === teacher);
+      const subscription = (subscriptions || []).find(sub => sub.username === teacher);
       
       if (subscription && subscription.subscription) {
         const classes = Array.isArray(incompleteTeachers[teacher]) 
@@ -2476,10 +2579,9 @@ app.post('/api/notify-incomplete-teachers', async (req, res) => {
             error: error.message
           });
           
-          // Si l'abonnement est invalide, le supprimer
           if (error.statusCode === 410) {
             console.log(`🗑️ Suppression abonnement invalide pour ${teacher}`);
-            await db.collection('pushSubscriptions').deleteOne({ username: teacher });
+            await supabase.from('push_subscriptions').delete().eq('username', teacher);
           }
         }
       } else {

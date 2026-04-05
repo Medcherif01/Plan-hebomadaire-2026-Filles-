@@ -1,8 +1,8 @@
 -- ============================================================
 -- SUPABASE SCHEMA - Plan Hebdomadaire 2026 Filles
 -- ============================================================
--- Exécuter ce script dans l'éditeur SQL de Supabase (Table Editor > SQL Editor)
--- OU via l'onglet "SQL Editor" dans le dashboard Supabase
+-- Exécuter ce script dans l'éditeur SQL de Supabase
+-- via l'onglet "SQL Editor" dans le dashboard Supabase
 -- ============================================================
 
 -- Extension pour gérer les UUID si besoin
@@ -90,18 +90,34 @@ create table if not exists subscriptions (
 create index if not exists idx_subscriptions_username on subscriptions(username);
 
 -- ============================================================
--- Activer Row Level Security (RLS) - désactivé pour le service role
--- Le backend utilise la clé SERVICE_ROLE qui bypass RLS
+-- ROW LEVEL SECURITY (RLS)
+-- IMPORTANT: Désactiver RLS sur toutes les tables car le backend
+-- utilise uniquement la clé SERVICE_ROLE côté serveur.
+-- Cela est sécurisé : les tables ne sont jamais exposées au public.
 -- ============================================================
-alter table plans               enable row level security;
-alter table lesson_plans        enable row level security;
-alter table weekly_lesson_plans enable row level security;
-alter table push_subscriptions  enable row level security;
-alter table subscriptions       enable row level security;
+alter table plans               disable row level security;
+alter table lesson_plans        disable row level security;
+alter table weekly_lesson_plans disable row level security;
+alter table push_subscriptions  disable row level security;
+alter table subscriptions       disable row level security;
 
--- Policies pour autoriser le service_role (backend) à tout faire
--- (La clé service_role bypass automatiquement RLS, ces policies
---  sont pour la clé anon si jamais nécessaire)
-
--- Pour le moment, on laisse RLS actif sans policy publique.
--- Le backend utilise SUPABASE_SERVICE_ROLE_KEY qui a accès complet.
+-- ============================================================
+-- Si vous préférez garder RLS activé, exécutez ces policies
+-- pour autoriser toutes les opérations via service_role :
+-- ============================================================
+-- alter table plans               enable row level security;
+-- alter table lesson_plans        enable row level security;
+-- alter table weekly_lesson_plans enable row level security;
+-- alter table push_subscriptions  enable row level security;
+-- alter table subscriptions       enable row level security;
+--
+-- create policy "service_role full access plans"
+--   on plans for all to service_role using (true) with check (true);
+-- create policy "service_role full access lesson_plans"
+--   on lesson_plans for all to service_role using (true) with check (true);
+-- create policy "service_role full access weekly_lesson_plans"
+--   on weekly_lesson_plans for all to service_role using (true) with check (true);
+-- create policy "service_role full access push_subscriptions"
+--   on push_subscriptions for all to service_role using (true) with check (true);
+-- create policy "service_role full access subscriptions"
+--   on subscriptions for all to service_role using (true) with check (true);

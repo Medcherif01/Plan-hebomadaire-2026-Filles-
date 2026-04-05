@@ -83,7 +83,17 @@ function getSupabase() {
     throw new Error('Variables d\'environnement SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY manquantes.');
   }
   supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false }
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false
+    },
+    global: {
+      headers: {
+        // Force le bypass RLS via la clé service_role
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+      }
+    }
   });
   console.log('✅ Client Supabase initialisé');
   return supabaseClient;

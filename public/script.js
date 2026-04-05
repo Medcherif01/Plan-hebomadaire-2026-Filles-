@@ -204,7 +204,53 @@
         }
 
         function updateFilterOptionDefaultTexts() { const filters = [ { selId: 'filterEnseignant', defaultKey: 'all' }, { selId: 'filterClasse', defaultKey: 'all_f' }, { selId: 'filterMatiere', defaultKey: 'all_f' }, { selId: 'filterPeriode', defaultKey: 'all_f' }, { selId: 'filterJour', defaultKey: 'all' }, { selId: 'weekSelector', defaultKey: 'select_week' }, { selId: 'notesClassSelector', defaultKey: 'select_class' } ]; filters.forEach(f => { const select = document.getElementById(f.selId); if (select) { const defaultOption = select.querySelector('option[value=""]'); if (defaultOption) { defaultOption.textContent = t(f.defaultKey); } } }); const jSel = document.getElementById('filterJour'); if (jSel) { const dayOptions = jSel.querySelectorAll('option'); const dayValues = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi"]; const dayTransKeys = ["day_sun", "day_mon", "day_tue", "day_wed", "day_thu"]; dayOptions.forEach(opt => { if (opt.value !== "") { const idx = dayValues.indexOf(opt.value); if (idx !== -1) opt.textContent = t(dayTransKeys[idx]); } }); } const weekSel = document.getElementById('weekSelector'); if (weekSel) { const weekOptions = weekSel.querySelectorAll('option'); weekOptions.forEach(opt => { if (opt.value && opt.value.match(/^\d+$/)) { const weekLabel = t('week_label'); opt.textContent = `${weekLabel.replace(':', '')} ${opt.value}`; } }); } }
-        function populateFilterOptions() { const data = planData || []; const getUniq = (k) => { const uniq = new Set(); data.forEach(i => { if (i && i[k] != null && i[k] !== '') { uniq.add(i[k]); } }); if (k?.trim().toLowerCase() === 'classe') { return [...uniq].sort(compareClasses); } else { return [...uniq].sort((a, b) => String(a).localeCompare(String(b))); } }; const ensK = findHKey('Enseignant'); const clsK = findHKey('Classe'); const perK = findHKey('Période'); const matK = findHKey('Matière'); const ens = ensK ? getUniq(ensK) : []; const cls = clsK ? getUniq(clsK) : []; const per = perK ? getUniq(perK) : []; const mat = matK ? getUniq(matK) : []; const updateSel = (id, opts, isCls = false) => { const sel = document.getElementById(id); const curV = sel.value; const defaultOptHTML = sel.querySelector('option[value=""]')?.outerHTML || `<option value="">${t(isCls ? 'all_f' : 'all')}</option>`; sel.innerHTML = defaultOptHTML; opts.forEach(o => { const opt = document.createElement('option'); opt.value = o; if (isCls) { const ar = classTranslations[o]; opt.textContent = ar ? `${ar} (${o})` : o; } else { opt.textContent = o; } sel.appendChild(opt); }); if (opts.includes(curV)) { sel.value = curV; } else { sel.value = ""; } }; updateSel('filterEnseignant', ens); updateSel('filterClasse', cls, true); updateSel('filterPeriode', per); updateSel('filterMatiere', mat); updateFilterOptionDefaultTexts(); const filterEnsSelect = document.getElementById('filterEnseignant'); const isAdmin = adminUsers.includes(loggedInUser); if(loggedInUser && !isAdmin){ // Recherche insensible à la casse/espaces pour trouver le nom dans les options const matchedOpt = Array.from(filterEnsSelect.options).find(o => o.value.trim().toLowerCase() === loggedInUser.trim().toLowerCase()); if (matchedOpt) { filterEnsSelect.value = matchedOpt.value; } else { filterEnsSelect.value = loggedInUser; } filterEnsSelect.disabled = true; } else { filterEnsSelect.disabled = false; } }
+        function populateFilterOptions() {
+            const data = planData || [];
+            const getUniq = (k) => {
+                const uniq = new Set();
+                data.forEach(i => { if (i && i[k] != null && i[k] !== '') { uniq.add(i[k]); } });
+                if (k?.trim().toLowerCase() === 'classe') { return [...uniq].sort(compareClasses); }
+                else { return [...uniq].sort((a, b) => String(a).localeCompare(String(b))); }
+            };
+            const ensK = findHKey('Enseignant');
+            const clsK = findHKey('Classe');
+            const perK = findHKey('Période');
+            const matK = findHKey('Matière');
+            const ens = ensK ? getUniq(ensK) : [];
+            const cls = clsK ? getUniq(clsK) : [];
+            const per = perK ? getUniq(perK) : [];
+            const mat = matK ? getUniq(matK) : [];
+            const updateSel = (id, opts, isCls = false) => {
+                const sel = document.getElementById(id);
+                const curV = sel.value;
+                const defaultOptHTML = sel.querySelector('option[value=""]')?.outerHTML || `<option value="">${t(isCls ? 'all_f' : 'all')}</option>`;
+                sel.innerHTML = defaultOptHTML;
+                opts.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o;
+                    if (isCls) { const ar = classTranslations[o]; opt.textContent = ar ? `${ar} (${o})` : o; }
+                    else { opt.textContent = o; }
+                    sel.appendChild(opt);
+                });
+                if (opts.includes(curV)) { sel.value = curV; } else { sel.value = ""; }
+            };
+            updateSel('filterEnseignant', ens);
+            updateSel('filterClasse', cls, true);
+            updateSel('filterPeriode', per);
+            updateSel('filterMatiere', mat);
+            updateFilterOptionDefaultTexts();
+            const filterEnsSelect = document.getElementById('filterEnseignant');
+            const isAdmin = adminUsers.includes(loggedInUser);
+            if (loggedInUser && !isAdmin) {
+                /* Recherche insensible a la casse/espaces pour trouver le nom dans les options */
+                const matchedOpt = Array.from(filterEnsSelect.options).find(o => o.value.trim().toLowerCase() === loggedInUser.trim().toLowerCase());
+                if (matchedOpt) { filterEnsSelect.value = matchedOpt.value; }
+                else { filterEnsSelect.value = loggedInUser; }
+                filterEnsSelect.disabled = true;
+            } else {
+                filterEnsSelect.disabled = false;
+            }
+        }
         function sortAndDisplay() { const filterEnsSelect = document.getElementById('filterEnseignant'); const isAdmin = adminUsers.includes(loggedInUser); if(loggedInUser && !isAdmin){ const matchedOpt = Array.from(filterEnsSelect.options).find(o => o.value.trim().toLowerCase() === loggedInUser.trim().toLowerCase()); if (matchedOpt) { filterEnsSelect.value = matchedOpt.value; } else { filterEnsSelect.value = loggedInUser; } filterEnsSelect.disabled = true; } else { filterEnsSelect.disabled = false; } const ensF = filterEnsSelect.value; const clsF = document.getElementById('filterClasse').value; const matF = document.getElementById('filterMatiere').value; const perF = document.getElementById('filterPeriode').value; const jF = document.getElementById('filterJour').value; const ensK = findHKey('Enseignant'); const clsK = findHKey('Classe'); const matK = findHKey('Matière'); const perK = findHKey('Période'); const jK = findHKey('Jour'); filteredAndSortedData = planData.filter(i => { if (!i) return false; const iE = ensK && i.hasOwnProperty(ensK) ? String(i[ensK]).trim() : null; const iC = clsK && i.hasOwnProperty(clsK) ? String(i[clsK]).trim() : null; const iM = matK && i.hasOwnProperty(matK) ? String(i[matK]).trim() : null; const iP = perK && i.hasOwnProperty(perK) ? String(i[perK]).trim() : null; const iJ = jK && i.hasOwnProperty(jK) ? String(i[jK]) : null; const pE = !ensF || (iE && iE.toLowerCase() === ensF.trim().toLowerCase()); const pC = !clsF || iC === clsF; const pM = !matF || iM === matF; const pP = !perF || iP === perF; const dayNameFromData = iJ ? extractDayName(iJ) : null; const pJ = !jF || dayNameFromData === jF; return pE && pC && pM && pP && pJ; }); const dayValuesFr = { "Dimanche": 1, "Lundi": 2, "Mardi": 3, "Mercredi": 4, "Jeudi": 5 }; filteredAndSortedData.sort((a, b) => { const classA = (clsK && a.hasOwnProperty(clsK)) ? a[clsK] : null; const classB = (clsK && b.hasOwnProperty(clsK)) ? b[clsK] : null; const classComp = compareClasses(classA, classB); if (classComp !== 0) return classComp; const jA_fr = (jK && a.hasOwnProperty(jK)) ? extractDayName(String(a[jK])) : null; const jB_fr = (jK && b.hasOwnProperty(jK)) ? extractDayName(String(b[jK])) : null; const dayOrdA = dayValuesFr[jA_fr] || 99; const dayOrdB = dayValuesFr[jB_fr] || 99; const dC = dayOrdA - dayOrdB; if (dC !== 0) return dC; const pA = (perK && a.hasOwnProperty(perK)) ? a[perK] : null; const pB = (perK && b.hasOwnProperty(perK)) ? b[perK] : null; const piA = parseInt(pA, 10); const piB = parseInt(pB, 10); if (!isNaN(piA) && !isNaN(piB)) { return piA - piB; } else { const sA = pA == null ? '' : String(pA); const sB = pB == null ? '' : String(pB); return sA.localeCompare(sB); } }); displayPlanTable(filteredAndSortedData); updateActionButtonsState(filteredAndSortedData.length > 0); }
         
         function displayPlanTable(data) {

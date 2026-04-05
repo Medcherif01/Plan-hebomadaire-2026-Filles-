@@ -406,29 +406,42 @@ body::before {
     width: 100%;
     border-collapse: collapse;
     table-layout: auto;
+    font-size: 0.9em;
 }
 
 #planTable th,
 #planTable td {
-    padding: 8px 10px;
+    padding: 6px 6px;
     border: 1px solid var(--border-color);
     text-align: left;
     vertical-align: top;
 }
 
-/* Colonnes fixes - largeur réduite */
-#planTable th:not(.editable),
-#planTable td:not(.editable) {
-    white-space: nowrap;
-    width: 1%;
+/* Colonnes non-éditables : compactes */
+#planTable th:not(.actions-column):not(.updated-at-column),
+#planTable td:not(.editable):not(.actions-column):not(.updated-at-column) {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/* Colonnes éditables - largeur flexible */
+/* Colonnes éditables : prennent tout l'espace disponible */
 #planTable td.editable {
     width: auto;
-    min-width: 200px;
+    min-width: 160px;
     max-width: none;
 }
+
+/* Supprimer la duplication du sélecteur */
+/* Améliorer la lisibilité des en-têtes de colonnes compactes */
+#planTable thead th {
+    font-size: 0.75em;
+    padding: 5px 4px;
+    letter-spacing: 0.2px;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+
 
 #planTable thead {
     background: linear-gradient(135deg, var(--primary-color) 0%, var(--info-color) 100%);

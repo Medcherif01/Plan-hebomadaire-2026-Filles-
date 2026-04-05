@@ -517,10 +517,12 @@
             if (loggedInUser === 'Mohamed') { 
                 document.getElementById('admin-actions').style.display = 'flex';
                 populateAdminReportClassSelector();
-                document.getElementById('lesson-plan-generator').style.display = 'flex';
+                const lessonPlanGen = document.getElementById('lesson-plan-generator');
+                if (lessonPlanGen) lessonPlanGen.style.display = 'flex';
             } else {
                 document.getElementById('admin-actions').style.display = 'none';
-                document.getElementById('lesson-plan-generator').style.display = 'none';
+                const lessonPlanGen = document.getElementById('lesson-plan-generator');
+                if (lessonPlanGen) lessonPlanGen.style.display = 'none';
             }
             
             currentWeek = null;

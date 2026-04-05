@@ -36,28 +36,34 @@
             max-width: 100%;
         }
         
-        /* R\u00e9duire la largeur des colonnes fixes */
+        /* Colonnes info r\u00e9duites au minimum absolu */
         #planTable th:nth-child(1),
-        #planTable td:nth-child(1) { width: 100px; } /* Enseignant */
+        #planTable td:nth-child(1) { width: 65px; min-width: 55px; max-width: 75px; white-space: normal; word-break: break-word; font-size: 0.78em; padding: 4px 3px; } /* Enseignant */
         
         #planTable th:nth-child(2),
-        #planTable td:nth-child(2) { width: 80px; } /* Classe */
+        #planTable td:nth-child(2) { width: 55px; min-width: 48px; max-width: 65px; white-space: normal; word-break: break-word; font-size: 0.78em; padding: 4px 3px; } /* Jour */
         
         #planTable th:nth-child(3),
-        #planTable td:nth-child(3) { width: 120px; } /* Mati\u00e8re */
+        #planTable td:nth-child(3) { width: 30px; min-width: 26px; max-width: 36px; white-space: nowrap; font-size: 0.78em; text-align: center; padding: 4px 2px; } /* P\u00e9riode */
         
         #planTable th:nth-child(4),
-        #planTable td:nth-child(4) { width: 60px; } /* P\u00e9riode */
+        #planTable td:nth-child(4) { width: 50px; min-width: 42px; max-width: 58px; white-space: nowrap; font-size: 0.78em; padding: 4px 3px; } /* Classe */
         
         #planTable th:nth-child(5),
-        #planTable td:nth-child(5) { width: 100px; } /* Jour */
+        #planTable td:nth-child(5) { width: 65px; min-width: 55px; max-width: 78px; white-space: normal; word-break: break-word; font-size: 0.78em; padding: 4px 3px; } /* Mati\u00e8re */
+        
+        /* Colonnes \u00e9ditables : maximiser l'espace disponible */
+        #planTable th:nth-child(6), #planTable td:nth-child(6) { width: auto; min-width: 180px; } /* Le\u00e7on */
+        #planTable th:nth-child(7), #planTable td:nth-child(7) { width: auto; min-width: 180px; } /* Travaux de classe */
+        #planTable th:nth-child(8), #planTable td:nth-child(8) { width: auto; min-width: 120px; } /* Support */
+        #planTable th:nth-child(9), #planTable td:nth-child(9) { width: auto; min-width: 150px; } /* Devoirs */
     </style>
 </head>
 <body dir="ltr">
     <div id="login-form">
         <div class="login-card">
             <img id="logo"
-                 src="https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299"
+                 src="/logo.png"
                  alt="Logo Al-Kawthar">
             <h1>Connexion</h1>
             <div>
@@ -76,7 +82,7 @@
     <div id="main-content" style="display: none;">
         <div class="main-header-container">
             <img id="logo-main"
-                 src="https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299"
+                 src="/logo.png"
                  alt="Logo Al-Kawthar">
             <div class="title-user-info">
                  <h1 id="main-title">Plans Hebdomadaires</h1>

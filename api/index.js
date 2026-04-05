@@ -1963,8 +1963,8 @@ app.post('/api/test-weekly-reminders', async (req, res) => {
         const message = {
           title: msgs.reminderTitle,
           body: msgs.reminderBody(teacher, targetWeek),
-          icon: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
-          badge: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
+          icon: '/logo.png',
+          badge: '/logo.png',
           requireInteraction: true,
           vibrate: [200, 100, 200, 100, 200],
           tag: `plan-reminder-${targetWeek}-${Date.now()}`,
@@ -2198,8 +2198,8 @@ app.post('/api/check-incomplete-and-notify', async (req, res) => {
         const message = {
           title: msgs.title,
           body: msgs.body(teacher, currentWeek, classes),
-          icon: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
-          badge: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
+          icon: '/logo.png',
+          badge: '/logo.png',
           requireInteraction: true,
           vibrate: [200, 100, 200, 100, 200],
           tag: `plan-reminder-${currentWeek}`,
@@ -2289,7 +2289,7 @@ app.post('/api/test-notification', async (req, res) => {
     const testMessage = {
       title: '🧪 Test de Notification',
       body: `Bonjour ${username}, ceci est un test de notification push. Si vous voyez ce message, les notifications fonctionnent correctement !`,
-      icon: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
+      icon: '/logo.png',
       data: {
         url: 'https://plan-hebdomadaire-2026-boys.vercel.app',
         teacher: username
@@ -2433,8 +2433,8 @@ app.post('/api/send-weekly-reminders', async (req, res) => {
         const message = {
           title: msgs.reminderTitle,
           body: msgs.reminderBody(teacher, currentWeek),
-          icon: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
-          badge: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
+          icon: '/logo.png',
+          badge: '/logo.png',
           requireInteraction: true,
           vibrate: [200, 100, 200, 100, 200],
           tag: `plan-reminder-${currentWeek}-${Date.now()}`,
@@ -2553,8 +2553,8 @@ app.post('/api/notify-incomplete-teachers', async (req, res) => {
         const message = {
           title: msgs.title,
           body: msgs.body(teacher, week, classes),
-          icon: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
-          badge: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
+          icon: '/logo.png',
+          badge: '/logo.png',
           requireInteraction: true,
           vibrate: [200, 100, 200, 100, 200],
           tag: `plan-alert-${week}-${Date.now()}`,

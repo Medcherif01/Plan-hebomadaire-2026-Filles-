@@ -15,8 +15,8 @@ self.addEventListener('push', (event) => {
   let data = {
     title: 'Rappel Plan Hebdomadaire',
     body: 'Veuillez compléter votre plan hebdomadaire.',
-    icon: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
-    badge: 'https://cdn.glitch.global/1c613b14-019c-488a-a856-d55d64d174d0/al-kawthar-international-schools-jeddah-saudi-arabia-modified.png?v=1739565146299',
+    icon: '/logo.png',
+    badge: '/logo.png',
     tag: 'plan-reminder',
     requireInteraction: true,
     data: {
